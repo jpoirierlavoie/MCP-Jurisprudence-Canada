@@ -130,6 +130,13 @@ export function rowFromListItem(
  * COALESCE sur les champs riches : un BALAYAGE (liste, 4 champs) ne doit pas écraser
  * une fiche déjà obtenue par RÉSOLUTION DIRECTE (12 champs) en y remettant des NULL.
  * Le cas se produit dès qu'on vérifie une citation puis qu'on balaie son tribunal.
+ *
+ * `source` enregistre la MEILLEURE provenance atteinte, pas la dernière : une fiche
+ * « lookup » recroisée par un balayage garde son étiquette. La rétrograder en « sweep »
+ * ne perdrait aucun champ (COALESCE ci-dessus) mais disqualifierait la ligne partout
+ * où seul « lookup » sert (lookupCase, get_case) — et chaque balayage qui recroise une
+ * fiche résolue rachèterait l'appel. Un suivi quotidien à fenêtres chevauchantes
+ * recroise TOUTES ses fiches à chaque passage : le cache ne servirait jamais.
  */
 const UPSERT = `
 INSERT INTO cases (database_id, case_id, lang, title, title_norm, citation, neutral_cite,
@@ -146,7 +153,7 @@ ON CONFLICT(database_id, case_id) DO UPDATE SET
   keywords        = COALESCE(excluded.keywords, cases.keywords),
   url             = COALESCE(excluded.url, cases.url),
   concatenated_id = COALESCE(excluded.concatenated_id, cases.concatenated_id),
-  source          = excluded.source,
+  source          = CASE WHEN cases.source = 'lookup' THEN 'lookup' ELSE excluded.source END,
   fetched_at      = excluded.fetched_at`;
 
 function bindRow(stmt: D1PreparedStatement, r: CaseRow): D1PreparedStatement {

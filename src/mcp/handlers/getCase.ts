@@ -41,7 +41,13 @@ export async function getCase(
   if (parIds) {
     if (!refresh) {
       const cache = await getCachedCase(ctx.db, databaseId!, caseId!);
-      if (cache) {
+      // Même barrière que dans lookupCase (src/store/lookup.ts) : une ligne de
+      // balayage (4 champs — ni date, ni numéro de dossier, ni hyperlien) ne peut
+      // pas tenir lieu de fiche. La servir rendrait un document amputé étiqueté
+      // « index local », alors que l'outil promet la fiche complète. Elle force
+      // donc l'appel, dont la fiche pleine prend la place (source « lookup »,
+      // qu'un balayage ultérieur ne rétrograde pas — voir l'UPSERT).
+      if (cache && cache.source === "lookup") {
         await logSearch(ctx.db, {
           tool: "canlii_get_case",
           query: `${databaseId}/${caseId}`,

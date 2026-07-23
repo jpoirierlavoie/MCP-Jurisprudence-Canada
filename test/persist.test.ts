@@ -113,6 +113,11 @@ describe("upsert et index FTS5", () => {
     expect(apres?.decision_date).toBe("2005-03-31");
     expect(apres?.url).toBe("https://canlii.ca/t/1g2h3");
     expect(apres?.docket_number).toBe("500-09-014");
+    // …et la PROVENANCE aussi : « lookup » ne se rétrograde jamais en « sweep ».
+    // Sinon, tout balayage qui recroise une fiche résolue la disqualifierait du
+    // cache (lookupCase et get_case ne servent que « lookup ») et rachèterait
+    // l'appel — un suivi quotidien à fenêtres chevauchantes recroise TOUT.
+    expect(apres?.source).toBe("lookup");
   });
 
   it("écrit un lot et l'indexe intégralement", async () => {

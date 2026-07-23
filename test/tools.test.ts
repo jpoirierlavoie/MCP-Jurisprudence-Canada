@@ -152,6 +152,36 @@ describe("§7.3 — canlii_get_case", () => {
     expect(out).toContain("jamais l'autorité actuelle");
   });
 
+  it("ne sert JAMAIS une ligne de balayage comme fiche : l'appel est refait", async () => {
+    // Flux quotidien réel : browse_cases persiste des lignes de balayage (4 champs —
+    // ni date, ni numéro de dossier, ni hyperlien), puis get_case est appelé sur
+    // chaque décision nouvelle. Servir la ligne de balayage rendrait une fiche
+    // amputée étiquetée « index local ».
+    await env.DB.prepare(
+      "INSERT INTO cases (database_id, case_id, lang, title, title_norm, citation, source, fetched_at) VALUES ('csc-scc','2008scc9','fr','Dunsmuir c. Nouveau-Brunswick','dunsmuir c nouveau-brunswick','2008 CSC 9 (CanLII)','sweep','2026-07-22T00:00:00.000Z')",
+    ).run();
+
+    const client = fakeClient({ "caseBrowse/fr/csc-scc/2008scc9/": dunsmuir });
+    const r = await callTool(
+      "canlii_get_case",
+      { database_id: "csc-scc", case_id: "2008scc9" },
+      toolCtx(client),
+    );
+    expect(client.chemins).toEqual(["caseBrowse/fr/csc-scc/2008scc9/"]);
+    expect(texte(r)).toContain("Provenance : CanLII");
+
+    // La fiche pleine a pris la place de la ligne de balayage : le passage suivant
+    // sert l'index local sans AUCUN appel sortant.
+    const client2 = fakeClient({});
+    const r2 = await callTool(
+      "canlii_get_case",
+      { database_id: "csc-scc", case_id: "2008scc9" },
+      toolCtx(client2),
+    );
+    expect(client2.chemins).toHaveLength(0);
+    expect(texte(r2)).toContain("index local");
+  });
+
   it("oriente vers find_case sur une citation non constructible", async () => {
     const r = await callTool(
       "canlii_get_case",
