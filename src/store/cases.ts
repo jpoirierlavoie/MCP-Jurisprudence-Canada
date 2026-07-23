@@ -218,7 +218,7 @@ export async function getCachedAny(
 ): Promise<CaseRow | null> {
   if (couples.length === 0) return null;
   const clauses = couples.map(() => "(database_id = ? AND case_id = ?)").join(" OR ");
-  const binds = couples.flatMap(([d, c]) => [d, c]);
+  const binds = couples.flat();
   const r = await db
     .prepare(`SELECT * FROM cases WHERE ${clauses} LIMIT 1`)
     .bind(...binds)
