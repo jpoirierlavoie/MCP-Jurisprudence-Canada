@@ -1,0 +1,143 @@
+/**
+ * Gabarits de sortie (spécification annexe A) et MISES EN GARDE du contrat de
+ * vérité (§2).
+ *
+ * ╔══════════════════════════════════════════════════════════════════════════════╗
+ * ║ Les constantes de mise en garde ci-dessous sont IMPOSÉES.                     ║
+ * ║                                                                              ║
+ * ║ §2 exige qu'elles vivent dans le CORPS DE LA RÉPONSE, et pas seulement dans   ║
+ * ║ la description de l'outil : une description n'est lue qu'une fois, une sortie ║
+ * ║ est lue à chaque appel. Elles sont verrouillées par `test/garde.test.ts`, qui ║
+ * ║ échoue si une refonte de gabarit les fait disparaître — le mode de panne      ║
+ * ║ redouté n'étant pas l'erreur, mais le SILENCE.                                ║
+ * ║                                                                              ║
+ * ║ Ne pas reformuler. Un vérificateur de citations qui promet plus qu'il ne      ║
+ * ║ tient est pire qu'aucun outil : il transforme une incertitude connue en       ║
+ * ║ fausse assurance, dans un contexte où la sanction est déontologique.          ║
+ * ╚══════════════════════════════════════════════════════════════════════════════╝
+ */
+
+import type { CaseRow } from "../store/cases";
+import { dateFr, joindre, motsCles, nombreFr, ou } from "./fr";
+
+// ── Mises en garde imposées (§2) ──────────────────────────────────────────────
+
+/** Pied de `canlii_verify_citations` — annexe A.1, verbatim. */
+export const GARDE_VERIFICATION =
+  "Établit l'existence et l'identité, jamais l'autorité actuelle (aucun historique\n" +
+  "d'appel, aucun indicateur de traitement) ni le contenu du dispositif.";
+
+/** Pied de `canlii_find_case` — annexe A.2, verbatim. */
+export const GARDE_RECHERCHE =
+  "Recherche sur l'intitulé et les mots-clés uniquement — l'API de CanLII n'expose\n" +
+  "pas le texte des décisions.";
+
+/** Tête de `canlii_subsequent_history` — annexe A.3, verbatim. */
+export const GARDE_SORTS_TETE = "Sorts ultérieurs — INDICE HEURISTIQUE, à vérifier à la source.";
+
+/** Pied de `canlii_subsequent_history` — annexe A.3, verbatim. */
+export const GARDE_SORTS_PIED =
+  "Ce résultat n'indique NI le sens du traitement (confirmée, infirmée, distinguée),\n" +
+  "NI les pourvois pendants, NI les refus de permission d'appeler. Ce n'est pas un\n" +
+  "citateur professionnel.";
+
+/** Pied du citateur (§7.4). */
+export const GARDE_CITATEUR =
+  "Listes brutes : elles n'indiquent AUCUN sens de traitement (suivi, distingué,\n" +
+  "infirmé). Pour les dispositions québécoises, enchaîner avec le connecteur\n" +
+  "« Législation du Québec » afin d'en lire le texte officiel.";
+
+/** Rappel du délai de diffusion, employé par `canlii_browse_cases` (§7.6). */
+export const GARDE_DIFFUSION =
+  "La diffusion sur CanLII connaît un délai : prévoir un jeu de deux jours sur les\n" +
+  "filtres de date de diffusion.";
+
+/** Explications concurrentes d'un INTROUVABLE (§2, conséquence n° 2). */
+export const EXPLICATIONS_INTROUVABLE =
+  "Explications possibles : numéro erroné · décision hors de la collection ·\n" +
+  "diffusion récente (prévoir un jeu de 2 jours).";
+
+// ── Rendu d'une fiche ─────────────────────────────────────────────────────────
+
+/**
+ * Hyperlien public. On ne rend JAMAIS d'URL `api.canlii.org` (§5.3) : uniquement
+ * l'hyperlien `canlii.ca` que l'API fournit.
+ */
+export function lien(row: { url: string | null }): string | null {
+  const u = (row.url ?? "").trim();
+  if (u.length === 0) return null;
+  return u.includes("api.canlii.org") ? null : u;
+}
+
+/**
+ * Bloc d'identité d'une décision, tel qu'à l'annexe A.1 :
+ *
+ *   Dunsmuir c. Nouveau-Brunswick
+ *   [2008] 1 RCS 190, 2008 CSC 9 (CanLII) · csc-scc · 2008-03-07
+ *   N° de dossier : 31459
+ *   Mots-clés : équité procédurale — raisonnabilité — …
+ *   https://canlii.ca/t/1vxsn
+ */
+export function ficheDecision(row: CaseRow, options: { avecIds?: boolean } = {}): string {
+  const lignes: string[] = [row.title];
+  lignes.push(
+    joindre([
+      ou(row.citation, row.neutral_cite ?? "—"),
+      row.database_id,
+      dateFr(row.decision_date),
+    ]),
+  );
+  if (options.avecIds) lignes.push(`Identifiants : ${row.database_id} / ${row.case_id}`);
+  if (row.docket_number) lignes.push(`N° de dossier : ${row.docket_number}`);
+  const mc = motsCles(row.keywords);
+  if (mc) lignes.push(`Mots-clés : ${mc}`);
+  const l = lien(row);
+  if (l) lignes.push(l);
+  return lignes.join("\n");
+}
+
+/** Ligne compacte d'une décision dans une liste de candidats (annexe A.2). */
+export function ligneCandidat(row: CaseRow): string {
+  const lignes: string[] = [row.title];
+  lignes.push(
+    joindre([
+      ou(row.citation, row.neutral_cite ?? "—"),
+      dateFr(row.decision_date),
+      `${row.database_id}/${row.case_id}`,
+    ]),
+  );
+  const l = lien(row);
+  if (l) lignes.push(l);
+  return lignes.join("\n");
+}
+
+/** Numérote un bloc et indente ses lignes de continuation (annexe A). */
+export function numeroter(index: number, bloc: string): string {
+  const lignes = bloc.split("\n");
+  const tete = `${index}. ${lignes[0] ?? ""}`;
+  const suite = lignes.slice(1).map((l) => (l.length > 0 ? `   ${l}` : l));
+  return [tete, ...suite].join("\n");
+}
+
+/** Assemble un document : titre, blocs numérotés, pied de mise en garde. */
+export function document(entete: string, blocs: string[], pied?: string | null): string {
+  const corps = blocs.map((b, i) => numeroter(i + 1, b)).join("\n\n");
+  return [entete, corps, pied ?? ""].filter((s) => s.trim().length > 0).join("\n\n");
+}
+
+/** Mention de provenance et de coût d'un balayage (annexe A.2). */
+export function provenance(opts: {
+  locales: number;
+  appels: number;
+  parcourues: number;
+  persistees: boolean;
+}): string {
+  if (opts.appels === 0) {
+    return `Provenance : index local (${nombreFr(opts.locales)} fiche(s)), aucun appel à CanLII.`;
+  }
+  const persist = opts.persistees ? ", persistées" : "";
+  return (
+    `Provenance : index local (${nombreFr(opts.locales)} fiche(s)) + balayage vif ` +
+    `(${nombreFr(opts.appels)} appel(s), ${nombreFr(opts.parcourues)} fiche(s) parcourues${persist}).`
+  );
+}
