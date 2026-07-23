@@ -28,9 +28,9 @@ describe("§6.5 — pliage et jetons", () => {
 
 describe("§13 — matrice de comparaison d'intitulés", () => {
   it("accents : Québec ≡ Quebec", () => {
-    expect(compareTitles("Ville de Québec c. Tremblay", "Ville de Quebec c. Tremblay").verdict).toBe(
-      "appariement",
-    );
+    expect(
+      compareTitles("Ville de Québec c. Tremblay", "Ville de Quebec c. Tremblay").verdict,
+    ).toBe("appariement");
   });
 
   it("formes sociétaires : « 9044-3422 Québec Inc. » ≡ « 9044-3422 Quebec inc »", () => {
@@ -56,7 +56,10 @@ describe("§13 — matrice de comparaison d'intitulés", () => {
 
   it("l'absence de patronyme ne produit pas de discordance sur un intitulé anonymisé", () => {
     // Piège explicite de §6.5 : ces intitulés ne contiennent AUCUN nom de partie.
-    const r = compareTitles("Protection de la jeunesse — 231234", "Protection de la jeunesse — 231234");
+    const r = compareTitles(
+      "Protection de la jeunesse — 231234",
+      "Protection de la jeunesse — 231234",
+    );
     expect(r.verdict).toBe("appariement");
     expect(r.manquants).toEqual([]);
   });

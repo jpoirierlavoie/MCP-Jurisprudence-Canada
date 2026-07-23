@@ -5,12 +5,7 @@
  */
 import { describe, expect, it } from "vitest";
 
-import {
-  type Directory,
-  formLabel,
-  parseCitation,
-  resolve,
-} from "../src/citation/parse";
+import { type Directory, formLabel, parseCitation, resolve } from "../src/citation/parse";
 
 // Répertoire d'amorçage identique à `migrations/0002_seed_court_codes.sql`.
 const SEED: Array<[string, string, string, string, string | null, number]> = [

@@ -73,7 +73,8 @@ export interface ParseResult {
  * Citation attribuée par CanLII, AVEC son couple de codes entre parenthèses.
  * Appliquée EN PREMIER et ses plages masquées ensuite — voir NEUTRAL.
  */
-const CANLII = /\b(1[89]\d{2}|20\d{2})\s+CanLII\s+(\d{1,7})\s*\(\s*([A-Z]{2})\s+([A-Z]{1,6})\s*\)/gi;
+const CANLII =
+  /\b(1[89]\d{2}|20\d{2})\s+CanLII\s+(\d{1,7})\s*\(\s*([A-Z]{2})\s+([A-Z]{1,6})\s*\)/gi;
 
 /** Même forme, mais sans les parenthèses : le tribunal reste indéterminable. */
 const CANLII_NUE = /\b(1[89]\d{2}|20\d{2})\s+CanLII\s+(\d{1,7})\b/gi;
@@ -290,7 +291,10 @@ function estIsole(input: string): boolean {
  *   lui, seule la plausibilité syntaxique joue. Passer le vrai répertoire améliore le
  *   balayage dans les phrases (un code connu n'a pas besoin d'être « plausible »).
  */
-export function parseCitation(input: string, connus: (code: string) => boolean = () => false): ParseResult {
+export function parseCitation(
+  input: string,
+  connus: (code: string) => boolean = () => false,
+): ParseResult {
   const texte = input.trim();
   const spans: Span[] = [];
   const isole = estIsole(texte);
@@ -374,7 +378,8 @@ export function resolve(form: CitationForm | UnparsedForm, dir: Directory): Reso
       constructible: "non",
       databaseId: null,
       caseId: null,
-      raison: "Forme non reconnue : ni citation neutre, ni citation attribuée par CanLII, ni recueil, ni identifiant d'éditeur.",
+      raison:
+        "Forme non reconnue : ni citation neutre, ni citation attribuée par CanLII, ni recueil, ni identifiant d'éditeur.",
       databaseConnue: false,
     };
   }
@@ -406,7 +411,8 @@ export function resolve(form: CitationForm | UnparsedForm, dir: Directory): Reso
         constructible: "non",
         databaseId: null,
         caseId: null,
-        raison: "Citation attribuée par CanLII privée de son couple de codes entre parenthèses (p. ex. « (QC CQ) ») : le tribunal ne peut pas être déduit.",
+        raison:
+          "Citation attribuée par CanLII privée de son couple de codes entre parenthèses (p. ex. « (QC CQ) ») : le tribunal ne peut pas être déduit.",
         databaseConnue: false,
       };
     }

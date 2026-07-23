@@ -6,7 +6,7 @@
  * contrat de vérité de §2 traduit en arithmétique.
  */
 
-import { tokens, tokenSet } from "./normalize";
+import { tokenSet, tokens } from "./normalize";
 
 export type Appariement = "appariement" | "partiel" | "discordance";
 
