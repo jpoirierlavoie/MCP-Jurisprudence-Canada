@@ -55,8 +55,13 @@ export interface SyncState {
  *      effectivement déclaré — les tribunaux sont créés, fusionnés et renommés) ;
  *   2. SI ET SEULEMENT SI `BACKFILL_ENABLED === "true"` : le moissonnage de §11.
  */
-export async function runScheduled(env: Env, now: Date = new Date()): Promise<void> {
-  const client = createClient(env);
+export async function runScheduled(
+  env: Env,
+  now: Date = new Date(),
+  /** Couture de test : injectable, jamais employée en production. */
+  clientInjecte?: CanliiClient,
+): Promise<void> {
+  const client = clientInjecte ?? createClient(env);
   try {
     if (await directoryStale(env.DB, now)) {
       await refreshDatabases(env.DB, client, (env.DEFAULT_LANG as Lang) ?? "fr", now);
@@ -103,7 +108,11 @@ export async function runBackfill(
 ): Promise<{ bases: number; fiches: number }> {
   const bases = liste(env.BACKFILL_DATABASES);
   const lang = (env.DEFAULT_LANG as Lang) ?? "fr";
-  const debut = now.getTime();
+  // ⚠ Le départ du chronomètre est l'horloge RÉELLE, pas `now`. `now` sert aux
+  //   horodatages écrits en base et peut être figé par un test ; s'en servir aussi
+  //   pour mesurer la durée écoulée compare deux horloges différentes et fait sortir
+  //   la boucle au premier tour dès que `now` n'est pas l'instant présent.
+  const debut = Date.now();
   let fiches = 0;
   let traitees = 0;
 
@@ -176,7 +185,12 @@ async function moissonnerBase(
     }
   }
 
-  await ecrireEtat(env.DB, base, etat.cursor_date, 0, now, etat.complete);
+  // ⚠ On ne réécrit ICI que l'horodatage de passage. Réécrire `cursor_date` avec la
+  //   valeur LUE À L'ENTRÉE écraserait la progression que la boucle ci-dessus vient
+  //   de persister année par année : le curseur reviendrait à son point de départ à
+  //   chaque exécution et le rattrapage ne progresserait JAMAIS — précisément le
+  //   défaut que §11 cherche à éviter en exigeant une écriture après chaque page.
+  await toucherDerniereExecution(env.DB, base, now);
   return ecrites;
 }
 
@@ -253,5 +267,27 @@ async function ecrireEtat(
       .run();
   } catch {
     // Un curseur non écrit fait recommencer la fenêtre : coûteux, jamais faux.
+  }
+}
+
+/**
+ * Note le passage du moissonneur SANS toucher au curseur.
+ *
+ * Séparé d'`ecrireEtat` pour rendre l'invariant impossible à enfreindre par
+ * inadvertance : rien, dans cette instruction, ne peut faire reculer la progression.
+ */
+async function toucherDerniereExecution(db: D1Database, base: string, now: Date): Promise<void> {
+  try {
+    await db
+      .prepare(
+        `INSERT INTO sync_state (database_id, cursor_date, cursor_offset, last_run_at, complete)
+         VALUES (?, NULL, 0, ?, 0)
+         ON CONFLICT(database_id) DO UPDATE SET last_run_at = excluded.last_run_at`,
+      )
+      .bind(base, now.toISOString())
+      .run();
+  } catch {
+    // Sans horodatage, la prochaine exécution refera le delta depuis le début :
+    // coûteux, jamais faux.
   }
 }
