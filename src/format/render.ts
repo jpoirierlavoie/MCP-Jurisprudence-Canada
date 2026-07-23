@@ -52,6 +52,16 @@ export const GARDE_DIFFUSION =
   "La diffusion sur CanLII connaît un délai : prévoir un jeu de deux jours sur les\n" +
   "filtres de date de diffusion.";
 
+/**
+ * Marqueur de la réconciliation exigée par §4.3.
+ *
+ * ⚠ Chaîne de COUPLAGE : `scripts/refresh-databases.mjs` la cherche dans la sortie de
+ *   `canlii_list_databases` pour décider si le répertoire est livrable. La reformuler
+ *   sans toucher au script produirait un FEU VERT MENSONGER sur la seule barrière que
+ *   §4.3 qualifie de bloquante. Épinglée par test/tools.test.ts.
+ */
+export const MARQUEUR_RECONCILIATION = "⚠ RÉCONCILIATION REQUISE";
+
 /** Explications concurrentes d'un INTROUVABLE (§2, conséquence n° 2). */
 export const EXPLICATIONS_INTROUVABLE =
   "Explications possibles : numéro erroné · décision hors de la collection ·\n" +

@@ -12,6 +12,7 @@
 import { describeError } from "../../canlii/client";
 import type { Lang } from "../../canlii/types";
 import { nombreFr } from "../../format/fr";
+import { MARQUEUR_RECONCILIATION } from "../../format/render";
 import {
   directoryMismatches,
   directoryStale,
@@ -92,8 +93,12 @@ export async function listDatabasesTool(
       ...courts.map((c) => `  · ${c.code} -> ${c.database_id} (${c.note ?? "hypothèse"})`),
       ...parens.map((p) => `  · (${p.juris_code} ${p.court_code}) -> ${p.database_id}`),
     ];
+    // Le marqueur vient de la CONSTANTE, jamais recopié : `scripts/refresh-databases.mjs`
+    // découpe la sortie dessus pour décider si le répertoire est livrable. Une copie
+    // littérale qui dériverait rendrait le script muet sur la seule barrière bloquante
+    // de §4.3 — il annoncerait « aucune correspondance démentie » alors qu'il y en a.
     alerte =
-      "⚠ RÉCONCILIATION REQUISE (§4.3) — ces correspondances d'amorçage désignent un\n" +
+      `${MARQUEUR_RECONCILIATION} (§4.3) — ces correspondances d'amorçage désignent un\n` +
       "databaseId ABSENT du répertoire réel de CanLII. Toute citation qui en dépend\n" +
       "sera rendue INTROUVABLE sans appel, avec renvoi à cet outil :\n" +
       details.join("\n");
