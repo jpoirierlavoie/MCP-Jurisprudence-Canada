@@ -1,0 +1,21 @@
+# Node / Worker
+node_modules/
+.wrangler/
+# généré par `wrangler types`
+worker-configuration.d.ts
+
+# Secrets locaux — ne JAMAIS versionner.
+# .dev.vars porte la CLEF D'API CanLII et un secret partagé de développement ;
+# mcp.url porte l'URL de production, laquelle CONTIENT le secret partagé (D7).
+*.token
+.dev.vars
+.dev.vars.*
+!.dev.vars.example
+mcp.url
+.env
+.env.*
+.secrets/
+
+# Artefacts de réconciliation du répertoire (scripts/refresh-databases.mjs)
+reconcile-*.sql
+reconcile-report.md

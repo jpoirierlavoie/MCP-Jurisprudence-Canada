@@ -1,0 +1,16 @@
+# Gabarit de `.dev.vars` — le vrai fichier est GITIGNORÉ et ne doit jamais être versionné.
+#
+# `wrangler dev` charge ces valeurs comme secrets locaux. En production, elles sont
+# posées par `wrangler secret put` et ne vivent nulle part sur le disque.
+
+# Clef d'API CanLII. Obtenue par le formulaire de commentaires de CanLII.
+# JAMAIS journalisée, JAMAIS renvoyée dans une sortie d'outil, JAMAIS dans une trace :
+# toute URL journalisée passe par redactUrl() (src/canlii/client.ts).
+# ATTENTION : `wrangler dev` avec cette clef fait de VRAIS appels et consomme le quota.
+CANLII_API_KEY=
+
+# Secret partagé du point d'entrée MCP (D7). En développement, mettre une valeur
+# quelconque — mais PAS celle de production : elle voyagerait dans le chemin d'URL de
+# chaque requête locale et finirait dans l'historique du shell.
+# Production : `openssl rand -hex 32` puis `wrangler secret put MCP_SHARED_SECRET`.
+MCP_SHARED_SECRET=dev-secret-local-seulement

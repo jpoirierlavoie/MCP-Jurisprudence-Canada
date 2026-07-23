@@ -1,0 +1,64 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "jurisprudence",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-07-01",
+  "compatibility_flags": ["nodejs_compat"],
+
+  // Domaine personnalisé (zone poirierlavoie.ca) : Cloudflare gère DNS + certificat.
+  // Le nom d'hôte n'emploie pas la marque d'un tiers ; le préfixe d'outil `canlii_` la
+  // conserve, parce que la couverture et les verdicts DÉPENDENT de la collection de
+  // CanLII et que le modèle doit le savoir (spéc. D8).
+  "routes": [{ "pattern": "jurisprudence.poirierlavoie.ca", "custom_domain": true }],
+  // workers.dev fermé : surface minimale. Le point d'entrée MCP porte le secret partagé
+  // dans le chemin (D7) — une seconde origine publique serait une seconde fuite possible.
+  "workers_dev": false,
+
+  "observability": { "enabled": true },
+
+  // Garde-fous d'exécution (forfait Workers PAYANT — confirmé avec Jason, 2026-07-23).
+  // `limits` n'est honoré que sur le modèle d'usage Standard ; sur le forfait gratuit ce
+  // bloc est inopérant et les plafonds réels tombent à 50 sous-requêtes / 10 ms de CPU.
+  // 200 sous-requêtes : bien en deçà du défaut payant (10 000), pour que le vrai plafond
+  // soit CANLII_MAX_CALLS_PER_INVOCATION et non la facture.
+  "limits": {
+    "cpu_ms": 30000,
+    "subrequests": 200
+  },
+
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "canlii",
+      // Créée par `wrangler d1 create canlii --location enam` (enam = est de l'Amérique
+      // du Nord, le repère le plus proche de Montréal). Aucune contrainte de résidence :
+      // rien de confidentiel n'y transite (spéc. §9.5).
+      "database_id": "PLACEHOLDER_A_REMPLACER_APRES_D1_CREATE",
+      "migrations_dir": "migrations"
+    }
+  ],
+
+  // Hebdomadaire, lundi 06:17 UTC : rafraîchit le RÉPERTOIRE des bases (les tribunaux sont
+  // créés, fusionnés et renommés — Régie du logement -> TAL, CLP/CRT -> TAT).
+  // Le moissonnage de masse (§11) n'a PAS de déclencheur : il exigerait un cron quotidien,
+  // délibérément absent tant que BACKFILL_ENABLED reste "false" (§16.1).
+  "triggers": { "crons": ["17 6 * * 1"] },
+
+  "vars": {
+    // Coupe-circuit : "false" => toute route MCP renvoie 404, /health compris.
+    "MCP_ENABLED": "true",
+    // Étranglement sortant. Le quota de CanLII n'est pas publié (§16.2) : ces valeurs
+    // sont délibérément prudentes et se resserrent, jamais l'inverse, sans mesure.
+    "CANLII_MIN_INTERVAL_MS": "250",
+    "CANLII_MAX_CALLS_PER_INVOCATION": "40",
+    "CANLII_TIMEOUT_MS": "15000",
+    // Le cache se remplit par l'usage (D6) : tout balayage est persisté.
+    "PERSIST_SWEEPS": "true",
+    // §11 — moissonnage planifié. FAUX par défaut, et à ne pas basculer avant la
+    // détermination de §16.1 auprès de CanLII : c'est un téléchargement en masse,
+    // qualitativement différent d'un cache.
+    "BACKFILL_ENABLED": "false",
+    "BACKFILL_DATABASES": "qcca,qccs,qccq,qctal",
+    "DEFAULT_LANG": "fr"
+  }
+}

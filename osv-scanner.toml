@@ -1,0 +1,46 @@
+# OSV-Scanner configuration — https://google.github.io/osv-scanner/configuration/
+#
+# Liste d'exceptions CIBLÉE : vulnérabilités triées comme NON APPLICABLES à ce
+# déploiement, pour qu'un non-problème connu ne fasse pas échouer le contrôle OSV
+# BLOQUANT (.github/workflows/osv-scanner.yml, qui sort non-zéro au moindre constat).
+# Ce n'est PAS un « continue-on-error » : toute vulnérabilité absente d'ici fait
+# encore échouer le contrôle. Chaque entrée reflète une alerte code-scanning
+# écartée — garder les deux en phase.
+#
+# ── sharp / libvips : GHSA-f88m-g3jw-g9cj (+ 4 CVE) ──────────────────────────
+# `sharp` est une dépendance OPTIONNELLE et TRANSITIVE de miniflare/wrangler,
+# employée uniquement pour émuler LOCALEMENT le binding Images de Cloudflare.
+#
+# Trois raisons d'irrecevabilité, cumulatives :
+#   1. Ce Worker n'a AUCUN binding Images (voir wrangler.jsonc) : le code de
+#      miniflare qui charge sharp n'est jamais atteint, même en dev.
+#   2. `sharp` est en devDependencies transitives. Le bundle déployé sur workerd
+#      ne contient ZÉRO dépendance npm (décision D2 : aucun cadriciel, aucune
+#      dépendance d'exécution) — sharp ne franchit jamais la frontière du déploiement.
+#   3. Les CVE visent le décodage d'images non fiables par libvips. Ce connecteur
+#      ne traite aucune image : ses entrées sont des citations et des identifiants
+#      de tribunaux, ses sorties du texte français.
+#
+# Aucun correctif non cassant n'existe en amont : `npm audit fix --force`
+# rétrograderait @cloudflare/vitest-pool-workers de 0.18.x à 0.8.30. À réexaminer
+# à chaque montée de wrangler/miniflare (Dependabot, hebdomadaire).
+
+[[IgnoredVulns]]
+id = "GHSA-f88m-g3jw-g9cj"
+reason = "sharp/libvips via miniflare (émulation locale du binding Images). Aucun binding Images ici, dépendance de développement transitive jamais déployée (bundle sans dépendance npm), et aucune image n'est traitée. Pas de correctif non cassant en amont."
+
+[[IgnoredVulns]]
+id = "CVE-2026-33327"
+reason = "Alias de GHSA-f88m-g3jw-g9cj (sharp/libvips) — voir l'entrée ci-dessus."
+
+[[IgnoredVulns]]
+id = "CVE-2026-33328"
+reason = "Alias de GHSA-f88m-g3jw-g9cj (sharp/libvips) — voir l'entrée ci-dessus."
+
+[[IgnoredVulns]]
+id = "CVE-2026-35590"
+reason = "Alias de GHSA-f88m-g3jw-g9cj (sharp/libvips) — voir l'entrée ci-dessus."
+
+[[IgnoredVulns]]
+id = "CVE-2026-35591"
+reason = "Alias de GHSA-f88m-g3jw-g9cj (sharp/libvips) — voir l'entrée ci-dessus."
