@@ -39,8 +39,92 @@ const VERSIONS = ["2025-06-18", "2025-03-26"] as const;
 
 const JSON_HEADERS = { "Content-Type": "application/json; charset=utf-8" };
 
-function jsonResponse(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
+/**
+ * Origines de navigateur admises.
+ *
+ * ╔══════════════════════════════════════════════════════════════════════════════╗
+ * ║ Deux exigences DISTINCTES se rejoignent ici, et il faut les servir toutes    ║
+ * ║ les deux :                                                                   ║
+ * ║                                                                              ║
+ * ║ 1. CORS. `claude.ai` est une application de NAVIGATEUR. Sans pré-vol accepté ║
+ * ║    et sans `Access-Control-Allow-Origin`, le navigateur refuse la requête —   ║
+ * ║    et le connecteur se solde par « Impossible de joindre le serveur », alors  ║
+ * ║    que le même point d'entrée répond parfaitement à un client serveur.        ║
+ * ║                                                                              ║
+ * ║ 2. Défense contre le RÉ-ATTACHEMENT DNS, exigée par la spécification MCP :    ║
+ * ║    une origine de navigateur non reconnue est REFUSÉE. Une origine absente    ║
+ * ║    (appel serveur à serveur, scripts/mcp-client.mjs) reste admise — c'est le  ║
+ * ║    motif retenu par `athena/mcp/bearer.py`.                                   ║
+ * ╚══════════════════════════════════════════════════════════════════════════════╝
+ */
+const ORIGINES_PAR_DEFAUT = ["https://claude.ai", "https://claude.com"];
+
+function originesAdmises(env: Env): string[] {
+  const brut = (env.ALLOWED_ORIGINS as string | undefined) ?? "";
+  const sup = brut
+    .split(",")
+    .map((o) => o.trim())
+    .filter((o) => o.length > 0);
+  return [...ORIGINES_PAR_DEFAUT, ...sup];
+}
+
+/** Origine à refléter, ou null si l'origine est absente ou refusée. */
+function originAutorisee(request: Request, env: Env): string | null {
+  const o = request.headers.get("Origin");
+  if (!o) return null; // serveur à serveur : pas de CORS à négocier
+  return originesAdmises(env).includes(o) ? o : null;
+}
+
+/** Une origine de NAVIGATEUR présente mais non reconnue doit être refusée. */
+function origineRefusee(request: Request, env: Env): boolean {
+  const o = request.headers.get("Origin");
+  return Boolean(o) && !originesAdmises(env).includes(o as string);
+}
+
+/**
+ * En-têtes CORS d'une réponse effective.
+ *
+ * `Vary: Origin` est obligatoire : sans lui, un cache intermédiaire pourrait
+ * resservir à une origine la réponse calculée pour une autre.
+ */
+function corsHeaders(origin: string | null): Record<string, string> {
+  if (!origin) return {};
+  return {
+    "Access-Control-Allow-Origin": origin,
+    Vary: "Origin",
+    // Le client lit ces en-têtes ; sans exposition explicite ils lui sont invisibles.
+    "Access-Control-Expose-Headers": "WWW-Authenticate, MCP-Protocol-Version",
+  };
+}
+
+function jsonResponse(body: unknown, status = 200, origin: string | null = null): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...JSON_HEADERS, ...corsHeaders(origin) },
+  });
+}
+
+/**
+ * Réponse au pré-vol CORS.
+ *
+ * ⚠ Le pré-vol est traité AVANT toute vérification du secret, et c'est
+ *   obligatoire : un navigateur émet `OPTIONS` SANS en-tête d'authentification et
+ *   sans corps. Exiger le secret ici ferait échouer le pré-vol, donc la requête
+ *   réelle, donc le connecteur — sans que rien n'ait été authentifié pour autant.
+ *   Le pré-vol ne divulgue rien : il ne fait qu'annoncer ce que le serveur accepte.
+ */
+function preflight(origin: string): Response {
+  return new Response(null, {
+    status: 204,
+    headers: {
+      "Access-Control-Allow-Origin": origin,
+      "Access-Control-Allow-Methods": "POST, OPTIONS",
+      "Access-Control-Allow-Headers":
+        "Content-Type, Authorization, MCP-Protocol-Version, Accept, Last-Event-ID",
+      "Access-Control-Max-Age": "86400",
+      Vary: "Origin",
+    },
+  });
 }
 
 /**
@@ -71,17 +155,25 @@ function presentedSecret(request: Request, pathname: string): string | null {
   return null;
 }
 
-function unauthorized(): Response {
+function unauthorized(origin: string | null = null): Response {
   return new Response(JSON.stringify({ error: "unauthorized" }), {
     status: 401,
-    headers: { ...JSON_HEADERS, "WWW-Authenticate": "Bearer" },
+    headers: { ...JSON_HEADERS, "WWW-Authenticate": "Bearer", ...corsHeaders(origin) },
   });
 }
 
-function methodNotAllowed(): Response {
+function methodNotAllowed(origin: string | null = null): Response {
   return new Response(JSON.stringify({ error: "method_not_allowed" }), {
     status: 405,
-    headers: { ...JSON_HEADERS, Allow: "POST" },
+    headers: { ...JSON_HEADERS, Allow: "POST, OPTIONS", ...corsHeaders(origin) },
+  });
+}
+
+/** Origine de navigateur présente mais non reconnue (§ défense ré-attachement DNS). */
+function forbiddenOrigin(): Response {
+  return new Response(JSON.stringify({ error: "forbidden_origin" }), {
+    status: 403,
+    headers: JSON_HEADERS,
   });
 }
 
@@ -104,17 +196,29 @@ export default {
 
     if (pathname === "/mcp" || pathname.startsWith("/mcp/")) {
       if (!actif) return notFound();
+
+      // Défense contre le ré-attachement DNS (spécification MCP) : une origine de
+      // NAVIGATEUR présente mais inconnue est refusée d'emblée. Une origine absente
+      // (serveur à serveur) passe — elle n'est pas soumise à la politique de même
+      // origine et ne peut donc pas être détournée de cette façon.
+      if (origineRefusee(request, env)) return forbiddenOrigin();
+      const origin = originAutorisee(request, env);
+
+      // Pré-vol CORS AVANT l'authentification : le navigateur l'émet sans en-tête
+      // d'authentification. L'exiger ici casserait le connecteur sans rien protéger.
+      if (request.method === "OPTIONS" && origin) return preflight(origin);
+
       // Aucun flux SSE, aucune session à supprimer : mode JSON sans état (D3).
-      if (request.method !== "POST") return methodNotAllowed();
+      if (request.method !== "POST") return methodNotAllowed(origin);
 
       const attendu = env.MCP_SHARED_SECRET;
       const presente = presentedSecret(request, pathname);
       // Sans secret configuré, on refuse TOUT. Le contraire — laisser passer quand la
       // configuration est incomplète — serait un défaut ouvert par omission.
       if (!attendu || !presente || !(await secretOk(presente, attendu))) {
-        return unauthorized();
+        return unauthorized(origin);
       }
-      return await handleMcp(request, env, ctx);
+      return await handleMcp(request, env, ctx, origin);
     }
 
     return notFound();
@@ -131,7 +235,12 @@ export default {
   },
 };
 
-async function handleMcp(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+async function handleMcp(
+  request: Request,
+  env: Env,
+  ctx: ExecutionContext,
+  origin: string | null,
+): Promise<Response> {
   // Négociation d'en-tête : absent => la plus ancienne version servie.
   const entete = request.headers.get("MCP-Protocol-Version");
   if (entete !== null && !VERSIONS.includes(entete as (typeof VERSIONS)[number])) {
@@ -142,6 +251,7 @@ async function handleMcp(request: Request, env: Env, ctx: ExecutionContext): Pro
         `Version de protocole non prise en charge ; versions servies : ${VERSIONS.join(", ")}.`,
       ),
       400,
+      origin,
     );
   }
 
@@ -150,11 +260,12 @@ async function handleMcp(request: Request, env: Env, ctx: ExecutionContext): Pro
     message = parseMessage(await request.text());
   } catch (e) {
     const je = e instanceof JsonRpcError ? e : new JsonRpcError(PARSE_ERROR, "Erreur d'analyse.");
-    return jsonResponse(errorResponse(je.requestId, je.code, je.message));
+    return jsonResponse(errorResponse(je.requestId, je.code, je.message), 200, origin);
   }
 
   // notifications/initialized, notifications/cancelled, … : accusé de réception vide.
-  if (isNotification(message)) return new Response(null, { status: 202 });
+  if (isNotification(message))
+    return new Response(null, { status: 202, headers: corsHeaders(origin) });
 
   const id = (message.id ?? null) as RequestId;
   const params = message.params ?? {};
@@ -162,28 +273,30 @@ async function handleMcp(request: Request, env: Env, ctx: ExecutionContext): Pro
   try {
     switch (message.method) {
       case "initialize":
-        return jsonResponse(resultResponse(id, initialize(params)));
+        return jsonResponse(resultResponse(id, initialize(params)), 200, origin);
       case "ping":
-        return jsonResponse(resultResponse(id, {}));
+        return jsonResponse(resultResponse(id, {}), 200, origin);
       case "tools/list":
-        return jsonResponse(resultResponse(id, { tools: listToolDescriptors() }));
+        return jsonResponse(resultResponse(id, { tools: listToolDescriptors() }), 200, origin);
       case "tools/call":
-        return jsonResponse(resultResponse(id, await toolsCall(params, env, ctx)));
+        return jsonResponse(resultResponse(id, await toolsCall(params, env, ctx)), 200, origin);
       default:
         return jsonResponse(
           errorResponse(id, METHOD_NOT_FOUND, `Méthode inconnue : ${message.method}`),
+          200,
+          origin,
         );
     }
   } catch (e) {
     if (e instanceof JsonRpcError) {
-      return jsonResponse(errorResponse(id, e.code, e.message));
+      return jsonResponse(errorResponse(id, e.code, e.message), 200, origin);
     }
     // Journalisation SANS l'URL (§9.2) : méthode et nature de l'échec, rien d'autre.
     console.error("échec de répartition MCP", {
       method: message.method,
       error: e instanceof Error ? e.name : "inconnu",
     });
-    return jsonResponse(errorResponse(id, INTERNAL_ERROR, "Erreur interne."));
+    return jsonResponse(errorResponse(id, INTERNAL_ERROR, "Erreur interne."), 200, origin);
   }
 }
 

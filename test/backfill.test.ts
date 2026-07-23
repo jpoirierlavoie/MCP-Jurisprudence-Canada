@@ -11,6 +11,19 @@
  * ╚══════════════════════════════════════════════════════════════════════════════╝
  */
 import { env } from "cloudflare:test";
+
+/**
+ * Surcharge de l'environnement pour un test.
+ *
+ * `wrangler types` fige chaque var sur la valeur LITTÉRALE de wrangler.jsonc
+ * (`BACKFILL_ENABLED: "false"`), si bien qu'un test qui bascule le drapeau ne
+ * compile pas sans élargissement. Le passage par `Env` est volontairement local à
+ * ce fichier : ailleurs, la précision du type est un garde-fou qu'on veut garder.
+ */
+function envAvec(over: Record<string, unknown>): Env {
+  return { ...env, ...over } as unknown as Env;
+}
+
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { runBackfill, runScheduled } from "../src/backfill";
@@ -73,7 +86,7 @@ describe("§11 — inerte par défaut", () => {
       "caseBrowse/fr/qcca/": page(3),
     });
     await runScheduled(
-      { ...env, CANLII_API_KEY: "x", BACKFILL_ENABLED: "true", BACKFILL_DATABASES: "qcca" },
+      envAvec({ CANLII_API_KEY: "x", BACKFILL_ENABLED: "true", BACKFILL_DATABASES: "qcca" }),
       NOW,
       client,
     );
@@ -90,7 +103,7 @@ describe("§11 — le moissonnage, quand on l'appelle directement", () => {
   it("écrit les fiches et PERSISTE LE CURSEUR après chaque page", async () => {
     const client = fakeClient({ "caseBrowse/fr/qcca/": page(3) });
     const r = await runBackfill(
-      { ...env, BACKFILL_DATABASES: "qcca", CANLII_API_KEY: "x" },
+      envAvec({ BACKFILL_DATABASES: "qcca", CANLII_API_KEY: "x" }),
       client,
       NOW,
       12,
@@ -109,7 +122,7 @@ describe("§11 — le moissonnage, quand on l'appelle directement", () => {
     // Défaut réel attrapé ici : la dernière écriture de `moissonnerBase` réécrivait le
     // curseur LU À L'ENTRÉE, annulant la progression année par année. Le rattrapage ne
     // serait alors jamais reparti d'où il s'était arrêté.
-    const e = { ...env, BACKFILL_DATABASES: "qcca", CANLII_API_KEY: "x" };
+    const e = envAvec({ BACKFILL_DATABASES: "qcca", CANLII_API_KEY: "x" });
 
     await runBackfill(e, fakeClient({ "caseBrowse/fr/qcca/": page(1) }), NOW, 4);
     const apres1 = await env.DB.prepare(
@@ -130,7 +143,7 @@ describe("§11 — le moissonnage, quand on l'appelle directement", () => {
   it("respecte son budget d'appels et s'arrête proprement", async () => {
     const client = fakeClient({ "caseBrowse/fr/qcca/": page(3) }, { maxCalls: 100 });
     await runBackfill(
-      { ...env, BACKFILL_DATABASES: "qcca", CANLII_API_KEY: "x" },
+      envAvec({ BACKFILL_DATABASES: "qcca", CANLII_API_KEY: "x" }),
       client,
       NOW,
       5, // budget serré
@@ -140,14 +153,14 @@ describe("§11 — le moissonnage, quand on l'appelle directement", () => {
 
   it("marque les fiches comme provenant du moissonnage", async () => {
     const client = fakeClient({ "caseBrowse/fr/qcca/": page(2) });
-    await runBackfill({ ...env, BACKFILL_DATABASES: "qcca", CANLII_API_KEY: "x" }, client, NOW, 6);
+    await runBackfill(envAvec({ BACKFILL_DATABASES: "qcca", CANLII_API_KEY: "x" }), client, NOW, 6);
     const r = await env.DB.prepare("SELECT DISTINCT source FROM cases").all<{ source: string }>();
     expect(r.results?.map((x) => x.source)).toEqual(["backfill"]);
   });
 
   it("ne fait rien quand aucune base n'est listée", async () => {
     const client = fakeClient({});
-    const r = await runBackfill({ ...env, BACKFILL_DATABASES: "" }, client, NOW);
+    const r = await runBackfill(envAvec({ BACKFILL_DATABASES: "" }), client, NOW);
     expect(r).toEqual({ bases: 0, fiches: 0 });
     expect(client.callsMade()).toBe(0);
   });
@@ -157,7 +170,7 @@ describe("§11 — le moissonnage, quand on l'appelle directement", () => {
       "INSERT INTO sync_state (database_id, cursor_date, cursor_offset, last_run_at, complete) VALUES ('qcca','2020-01-01',0,'2026-07-20T00:00:00.000Z',1)",
     ).run();
     const client = fakeClient({ "caseBrowse/fr/qcca/": { cases: [] } });
-    await runBackfill({ ...env, BACKFILL_DATABASES: "qcca", CANLII_API_KEY: "x" }, client, NOW, 6);
+    await runBackfill(envAvec({ BACKFILL_DATABASES: "qcca", CANLII_API_KEY: "x" }), client, NOW, 6);
     // last_run_at 2026-07-20 moins 2 jours => changedAfter = 2026-07-18.
     expect(client.chemins.length).toBeGreaterThan(0);
   });

@@ -13,8 +13,17 @@ import { type JsonSchema, validateArgs } from "../src/mcp/validate";
 
 const SECRET = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 
-function envAvec(over: Partial<Env> = {}): Env {
-  return { ...env, MCP_SHARED_SECRET: SECRET, CANLII_API_KEY: "clef-de-test", ...over };
+// `wrangler types` fige chaque var sur sa valeur LITTÉRALE de wrangler.jsonc :
+// `Partial<Env>` garde donc `MCP_ENABLED: "true"` et interdit de l'éteindre dans un
+// test. L'élargissement est confiné à ce helper — ailleurs, la précision du type
+// reste un garde-fou utile.
+function envAvec(over: Record<string, unknown> = {}): Env {
+  return {
+    ...env,
+    MCP_SHARED_SECRET: SECRET,
+    CANLII_API_KEY: "clef-de-test",
+    ...over,
+  } as unknown as Env;
 }
 
 async function appeler(
@@ -46,6 +55,130 @@ const rpc = (method: string, params?: unknown, id: number | string = 1) => ({
   ...(params === undefined ? {} : { params }),
 });
 
+describe("CORS — sans quoi claude.ai ne peut pas joindre le serveur", () => {
+  const SECRET_URL = `https://x/mcp/${SECRET}`;
+
+  /**
+   * Défaut réel constaté à la mise en service : le serveur répondait parfaitement
+   * à un client SERVEUR (curl, scripts/mcp-client.mjs) et restait injoignable
+   * depuis claude.ai, qui est une application de NAVIGATEUR. Le pré-vol `OPTIONS`
+   * recevait un 405 et les réponses ne portaient aucun en-tête CORS : le
+   * navigateur refusait avant même de lire la réponse.
+   */
+  it("répond au pré-vol OPTIONS SANS exiger le secret", async () => {
+    const ctx = createExecutionContext();
+    const res = await worker.fetch(
+      new Request("https://x/mcp/peu-importe", {
+        method: "OPTIONS",
+        headers: {
+          Origin: "https://claude.ai",
+          "Access-Control-Request-Method": "POST",
+          "Access-Control-Request-Headers": "content-type",
+        },
+      }),
+      envAvec(),
+      ctx,
+    );
+    await waitOnExecutionContext(ctx);
+    // Un navigateur émet le pré-vol sans authentification : l'exiger casserait tout.
+    expect(res.status).toBe(204);
+    expect(res.headers.get("Access-Control-Allow-Origin")).toBe("https://claude.ai");
+    expect(res.headers.get("Access-Control-Allow-Methods")).toContain("POST");
+    expect(res.headers.get("Access-Control-Allow-Headers")?.toLowerCase()).toContain(
+      "content-type",
+    );
+    expect(res.headers.get("Vary")).toBe("Origin");
+  });
+
+  it("une réponse réelle porte Access-Control-Allow-Origin", async () => {
+    const ctx = createExecutionContext();
+    const res = await worker.fetch(
+      new Request(SECRET_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Origin: "https://claude.ai" },
+        body: JSON.stringify(rpc("ping")),
+      }),
+      envAvec(),
+      ctx,
+    );
+    await waitOnExecutionContext(ctx);
+    expect(res.status).toBe(200);
+    // Sans cet en-tête, le navigateur bloque la LECTURE de la réponse, même 200.
+    expect(res.headers.get("Access-Control-Allow-Origin")).toBe("https://claude.ai");
+  });
+
+  it("un 401 porte aussi les en-têtes CORS, sinon l'erreur est illisible", async () => {
+    const ctx = createExecutionContext();
+    const res = await worker.fetch(
+      new Request("https://x/mcp/mauvais-secret", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Origin: "https://claude.ai" },
+        body: JSON.stringify(rpc("ping")),
+      }),
+      envAvec(),
+      ctx,
+    );
+    await waitOnExecutionContext(ctx);
+    expect(res.status).toBe(401);
+    expect(res.headers.get("Access-Control-Allow-Origin")).toBe("https://claude.ai");
+  });
+
+  it("REFUSE une origine de navigateur inconnue (ré-attachement DNS)", async () => {
+    const ctx = createExecutionContext();
+    const res = await worker.fetch(
+      new Request(SECRET_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Origin: "https://evil.example" },
+        body: JSON.stringify(rpc("ping")),
+      }),
+      envAvec(),
+      ctx,
+    );
+    await waitOnExecutionContext(ctx);
+    // 403 MÊME avec le bon secret : l'origine est jugée avant l'authentification.
+    expect(res.status).toBe(403);
+    expect(res.headers.get("Access-Control-Allow-Origin")).toBeNull();
+  });
+
+  it("un appel SANS origine (serveur à serveur) reste admis", async () => {
+    const ctx = createExecutionContext();
+    const res = await worker.fetch(
+      new Request(SECRET_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(rpc("ping")),
+      }),
+      envAvec(),
+      ctx,
+    );
+    await waitOnExecutionContext(ctx);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Access-Control-Allow-Origin")).toBeNull();
+  });
+
+  it("ALLOWED_ORIGINS ajoute une origine sans retirer claude.ai", async () => {
+    const e = envAvec({ ALLOWED_ORIGINS: "https://exemple.test" });
+    for (const [origine, attendu] of [
+      ["https://exemple.test", 200],
+      ["https://claude.ai", 200],
+      ["https://autre.test", 403],
+    ] as Array<[string, number]>) {
+      const ctx = createExecutionContext();
+      const res = await worker.fetch(
+        new Request(SECRET_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Origin: origine },
+          body: JSON.stringify(rpc("ping")),
+        }),
+        e,
+        ctx,
+      );
+      await waitOnExecutionContext(ctx);
+      expect(res.status, origine).toBe(attendu);
+    }
+  });
+});
+
 describe("§8 — routage", () => {
   it("GET /health répond 200 sans authentification", async () => {
     const ctx = createExecutionContext();
@@ -59,7 +192,9 @@ describe("§8 — routage", () => {
     for (const method of ["GET", "DELETE"]) {
       const res = await appeler(null, { method });
       expect(res.status).toBe(405);
-      expect(res.headers.get("Allow")).toBe("POST");
+      // OPTIONS figure desormais dans Allow : le pre-vol CORS est servi (claude.ai
+      // est un client de NAVIGATEUR). GET et DELETE restent refuses.
+      expect(res.headers.get("Allow")).toBe("POST, OPTIONS");
     }
   });
 

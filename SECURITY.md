@@ -66,6 +66,19 @@ the metadata served is public. That proportionality is deliberate and documented
 §9.4 of the specification, along with the migration path to OAuth 2.1 should the
 connector ever be shared.
 
+**Browser origins.** `claude.ai` is a browser application, so the endpoint answers CORS
+preflights and reflects `Access-Control-Allow-Origin`. Only an allow-listed origin is
+served — `https://claude.ai`, `https://claude.com`, plus anything added via the
+`ALLOWED_ORIGINS` variable. A browser `Origin` that is present but unrecognised is
+refused with `403` **before authentication is even attempted**, which is the
+DNS-rebinding defence the MCP specification requires. Requests with no `Origin` header
+at all (server-to-server) are unaffected.
+
+The preflight is answered *before* the secret is checked. That is deliberate and
+necessary: browsers send `OPTIONS` without credentials, so requiring the secret there
+would break every browser client while protecting nothing — a preflight discloses only
+what the server accepts.
+
 Known and accepted properties of this model:
 - The secret travels in the URL path, so it must never be logged. `src/index.ts`
   carries an explicit prohibition on logging `request.url`, and every outbound URL is
