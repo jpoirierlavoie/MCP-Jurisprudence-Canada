@@ -90,12 +90,29 @@ if (ecrireSql) {
     "--   Ne passer `verified = 1` qu'après un appel RÉUSSI sur une vraie citation.",
     "",
     ...lignes.map((l) => {
-      const [gauche, droite] = l.split("->").map((x) => x.trim());
+      // La ligne a la forme « · CODE -> base (note) » ; on retire la puce avant tout.
+      const [gauche, droite] = l
+        .replace(/^·\s*/, "")
+        .split("->")
+        .map((x) => x.trim());
+      const code = gauche.split(/\s+/)[0];
+      // Un couple entre parenthèses — « (QC CQ) » — vise `paren_codes`, pas
+      // `court_codes` : proposer le mauvais UPDATE ferait porter la correction sur
+      // une table qui n'a pas la colonne, et l'erreur se verrait à l'exécution.
+      const estCouple = gauche.startsWith("(");
+      if (estCouple) {
+        const [juris, cour] = gauche.replace(/[()]/g, "").trim().split(/\s+/);
+        return (
+          `-- (${juris} ${cour}) pointe vers « ${droite} », absent du répertoire.\n` +
+          `-- UPDATE paren_codes SET database_id = '<A_REMPLIR>', verified = 0\n` +
+          `--   WHERE juris_code = '${juris}' AND court_code = '${cour}';`
+        );
+      }
       return (
-        `-- ${gauche} pointe vers « ${droite} », absent du répertoire.\n` +
+        `-- ${code} pointe vers « ${droite} », absent du répertoire.\n` +
         `-- UPDATE court_codes SET database_id = '<A_REMPLIR>', verified = 0,\n` +
         `--   note = 'réconcilié le ${new Date().toISOString().slice(0, 10)}'\n` +
-        `--   WHERE code = '${gauche.split(/\s+/)[0]}';`
+        `--   WHERE code = '${code}';`
       );
     }),
     "",

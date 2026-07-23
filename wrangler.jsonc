@@ -33,7 +33,7 @@
       // Créée par `wrangler d1 create canlii --location enam` (enam = est de l'Amérique
       // du Nord, le repère le plus proche de Montréal). Aucune contrainte de résidence :
       // rien de confidentiel n'y transite (spéc. §9.5).
-      "database_id": "PLACEHOLDER_A_REMPLACER_APRES_D1_CREATE",
+      "database_id": "4025ee7d-90f2-4107-92ea-f8430403c6c5",
       "migrations_dir": "migrations"
     }
   ],
