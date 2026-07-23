@@ -19,7 +19,12 @@ function envAvec(over: Partial<Env> = {}): Env {
 
 async function appeler(
   body: unknown,
-  opts: { secret?: string | null; method?: string; headers?: Record<string, string>; env?: Env } = {},
+  opts: {
+    secret?: string | null;
+    method?: string;
+    headers?: Record<string, string>;
+    env?: Env;
+  } = {},
 ): Promise<Response> {
   const secret = opts.secret === undefined ? SECRET : opts.secret;
   const chemin = secret === null ? "/mcp" : `/mcp/${secret}`;
@@ -44,11 +49,7 @@ const rpc = (method: string, params?: unknown, id: number | string = 1) => ({
 describe("§8 — routage", () => {
   it("GET /health répond 200 sans authentification", async () => {
     const ctx = createExecutionContext();
-    const res = await worker.fetch(
-      new Request("https://x/health"),
-      envAvec(),
-      ctx,
-    );
+    const res = await worker.fetch(new Request("https://x/health"), envAvec(), ctx);
     await waitOnExecutionContext(ctx);
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ status: "ok" });
@@ -200,7 +201,9 @@ describe("§8 — méthodes JSON-RPC", () => {
 
   it("un outil inconnu rend isError, PAS une erreur JSON-RPC", async () => {
     const res = await appeler(rpc("tools/call", { name: "canlii_inexistant", arguments: {} }));
-    const body = (await res.json()) as { result: { isError: boolean; content: [{ text: string }] } };
+    const body = (await res.json()) as {
+      result: { isError: boolean; content: [{ text: string }] };
+    };
     expect(body.result.isError).toBe(true);
     expect(body.result.content[0].text).toContain("Outil inconnu");
   });
@@ -209,7 +212,9 @@ describe("§8 — méthodes JSON-RPC", () => {
     const res = await appeler(
       rpc("tools/call", { name: "canlii_parse_citation", arguments: { citation: 42 } }),
     );
-    const body = (await res.json()) as { result: { isError: boolean; content: [{ text: string }] } };
+    const body = (await res.json()) as {
+      result: { isError: boolean; content: [{ text: string }] };
+    };
     expect(body.result.isError).toBe(true);
     expect(body.result.content[0].text).toContain("chaîne de caractères");
   });
@@ -221,7 +226,9 @@ describe("§8 — méthodes JSON-RPC", () => {
         arguments: { citation: "2020 QCCA 495", inconnu: true },
       }),
     );
-    const body = (await res.json()) as { result: { isError: boolean; content: [{ text: string }] } };
+    const body = (await res.json()) as {
+      result: { isError: boolean; content: [{ text: string }] };
+    };
     expect(body.result.isError).toBe(true);
     expect(body.result.content[0].text).toContain("n'est pas un argument reconnu");
   });
@@ -291,7 +298,9 @@ describe("validateArgs — port du sous-ensemble d'Athéna", () => {
   };
 
   it("accepte un objet conforme", () => {
-    expect(validateArgs(schema, { titre: "abc", n: 3, choix: "a", liste: [1], drapeau: true })).toEqual([]);
+    expect(
+      validateArgs(schema, { titre: "abc", n: 3, choix: "a", liste: [1], drapeau: true }),
+    ).toEqual([]);
   });
 
   it("signale le manquant, l'inconnu, le type, l'enum et les bornes", () => {
@@ -309,7 +318,9 @@ describe("validateArgs — port du sous-ensemble d'Athéna", () => {
   it("valide les éléments d'un tableau, un niveau", () => {
     expect(validateArgs(schema, { titre: "ab", liste: [1, -3] }).join(" ")).toContain("liste[1]");
     expect(validateArgs(schema, { titre: "ab", liste: [] }).join(" ")).toContain("au moins 1");
-    expect(validateArgs(schema, { titre: "ab", liste: [1, 2, 3] }).join(" ")).toContain("au plus 2");
+    expect(validateArgs(schema, { titre: "ab", liste: [1, 2, 3] }).join(" ")).toContain(
+      "au plus 2",
+    );
   });
 
   it("un booléen n'est pas soumis aux bornes numériques", () => {

@@ -120,7 +120,9 @@ describe("§7.1 — les cinq verdicts", () => {
 describe("§6.4 — auto-correction du répertoire", () => {
   it("bascule csc <-> scc, consigne la correspondance et passe verified = 1", async () => {
     // Le répertoire d'amorçage dit « scc » ; ici seule la forme « csc » répond.
-    await env.DB.prepare("UPDATE court_codes SET caseid_code = 'csc', verified = 0 WHERE code = 'CSC'").run();
+    await env.DB.prepare(
+      "UPDATE court_codes SET caseid_code = 'csc', verified = 0 WHERE code = 'CSC'",
+    ).run();
 
     const { texte: t, client } = await verifier([{ citation: "2008 CSC 9" }], {
       "caseBrowse/fr/csc-scc/2008scc9/": dunsmuir,
@@ -131,8 +133,9 @@ describe("§6.4 — auto-correction du répertoire", () => {
     expect(client.chemins[0]).toContain("2008csc9");
     expect(client.chemins.some((c) => c.includes("2008scc9"))).toBe(true);
 
-    const row = await env.DB.prepare("SELECT caseid_code, verified, note FROM court_codes WHERE code = 'CSC'")
-      .first<{ caseid_code: string; verified: number; note: string }>();
+    const row = await env.DB.prepare(
+      "SELECT caseid_code, verified, note FROM court_codes WHERE code = 'CSC'",
+    ).first<{ caseid_code: string; verified: number; note: string }>();
     expect(row?.caseid_code).toBe("scc");
     expect(row?.verified).toBe(1);
     expect(row?.note).toContain("corrigé à l'usage");
@@ -168,9 +171,13 @@ describe("§5.2 — budget épuisé ⇒ résultat partiel annoncé", () => {
 
 describe("une panne réseau n'est PAS une absence", () => {
   it("rend INDÉTERMINÉE et non INTROUVABLE quand CanLII est injoignable", async () => {
-    const { texte: t } = await verifier([{ citation: "2008 CSC 9" }], {}, {
-      erreur: () => Object.assign(new Error("réseau"), { name: "CanliiTimeoutError" }),
-    });
+    const { texte: t } = await verifier(
+      [{ citation: "2008 CSC 9" }],
+      {},
+      {
+        erreur: () => Object.assign(new Error("réseau"), { name: "CanliiTimeoutError" }),
+      },
+    );
     expect(t).toContain("INDÉTERMINÉE");
     expect(t).toContain("PAS un constat d'absence");
     expect(t).not.toContain("INTROUVABLE");

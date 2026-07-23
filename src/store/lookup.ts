@@ -205,14 +205,13 @@ export async function lookupCase(
         now,
       );
       await upsertCase(db, row);
-      // Apprentissage du répertoire (§6.4). Deux occasions, et la seconde compte
-      // autant que la première :
-      //   - un RATTRAPAGE a réussi (i > 0) : la correspondance amorcée était fausse ;
-      //   - la fiche revient sous un caseId DIFFÉRENT de celui qu'on a demandé, même
-      //     en résolution directe. C'est le cas fr/en (« 2008scc9 » demandé,
-      //     « 2008csc9 » rendu) : sans l'apprendre, on reconstruirait indéfiniment
-      //     l'identifiant que CanLII n'emploie pas, et le cache ne servirait jamais.
-      if (i > 0 || row.case_id !== c.caseId) await apprendre(db, form, c, meta, res, row.case_id);
+      // Apprentissage du répertoire (§6.4) : UNIQUEMENT sur un rattrapage réussi.
+      // Une résolution directe n'apprend rien qu'on ne sache déjà — et surtout, il ne
+      // faut PAS « corriger » court_codes vers le fragment que CanLII emploie dans sa
+      // réponse (« csc » là où l'on a demandé « scc ») : les fiches sont clées par ce
+      // qu'on demande (voir rowFromMetadata), donc déplacer le fragment ferait
+      // construire un identifiant qui ne correspond plus aux lignes déjà en cache.
+      if (i > 0) await apprendre(db, form, c, meta, res);
       return {
         status: "trouvee",
         row,
@@ -267,9 +266,9 @@ export async function lookupCase(
 /**
  * Consigne la correspondance qui a effectivement fonctionné (§6.4).
  *
- * @param caseIdRendu identifiant sous lequel CanLII a effectivement classé la fiche.
- *   C'est LUI qui fait autorité, pas celui qu'on a demandé : c'est la seule façon de
- *   converger sur le fragment propre à la langue (« csc » plutôt que « scc »).
+ * Le fragment consigné est celui du caseId QUI A FONCTIONNÉ — pas celui que CanLII
+ * emploie dans sa réponse : les fiches sont clées par ce qu'on demande, et les deux
+ * doivent rester cohérents.
  */
 async function apprendre(
   db: D1Database,
@@ -277,13 +276,11 @@ async function apprendre(
   c: Candidat,
   meta: CaseMetadata,
   res: Resolution,
-  caseIdRendu?: string,
 ): Promise<void> {
   const concat = meta.concatenatedId ?? null;
   if (form.kind === "neutral") {
-    const retenu = caseIdRendu ?? c.caseId;
-    const fragment =
-      extraireFragment(retenu, form) ?? c.caseidCode ?? form.code.toLowerCase();
+    const retenu = c.caseId;
+    const fragment = c.caseidCode ?? extraireFragment(retenu, form) ?? form.code.toLowerCase();
     await confirmCourtCode(
       db,
       form.code,

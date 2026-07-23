@@ -91,7 +91,9 @@ export async function resetDb(): Promise<void> {
 }
 
 /** Remplit `databases` comme après un rafraîchissement réussi. */
-export async function seedDatabases(ids: string[] = ["csc-scc", "qcca", "qccs", "qccq"]): Promise<void> {
+export async function seedDatabases(
+  ids: string[] = ["csc-scc", "qcca", "qccs", "qccq"],
+): Promise<void> {
   const stmt = env.DB.prepare(
     "INSERT INTO databases (id, kind, jurisdiction, name_fr, name_norm, refreshed_at) VALUES (?,?,?,?,?,?) ON CONFLICT(id) DO NOTHING",
   );
