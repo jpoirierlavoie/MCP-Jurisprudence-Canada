@@ -53,8 +53,20 @@ export function rowFromMetadata(
   const flat = flattenCaseId(meta.caseId);
   const title = (meta.title ?? "").trim() || "(intitulé absent)";
   return {
-    database_id: meta.databaseId || fallback.databaseId,
-    case_id: flat?.caseId || fallback.caseId,
+    // ⚠ La ligne est clée par ce QUE L'ON A DEMANDÉ, pas par ce que CanLII renvoie.
+    //
+    //   L'API rend `caseId` sous la clef de SA langue : une fiche demandée à
+    //   `caseBrowse/fr/csc-scc/2008scc9/` revient avec `caseId: {"fr": "2008csc9"}`.
+    //   Clée sur la valeur renvoyée, la fiche serait rangée sous « 2008csc9 » alors que
+    //   toute résolution ultérieure la cherche sous « 2008scc9 » : le cache ne
+    //   servirait JAMAIS, chaque vérification rappellerait l'API, et `refresh` n'aurait
+    //   plus de sens. Défaut trouvé par test/verify.test.ts (« un second appel
+    //   identique ne fait aucun appel sortant »).
+    //
+    //   La langue sous laquelle CanLII a clé la fiche reste conservée dans `lang`, et
+    //   `concatenated_id` porte la forme canonique — rien n'est perdu.
+    database_id: fallback.databaseId || meta.databaseId || "",
+    case_id: fallback.caseId || flat?.caseId || "",
     lang: flat?.lang ?? meta.language ?? null,
     title,
     title_norm: fold(title),
@@ -188,6 +200,28 @@ export async function getCachedCase(
   const r = await db
     .prepare("SELECT * FROM cases WHERE database_id = ? AND case_id = ?")
     .bind(databaseId, caseId)
+    .first<CaseRow>();
+  return r ?? null;
+}
+
+/**
+ * Cherche la PREMIÈRE fiche en cache parmi plusieurs couples (database_id, case_id).
+ *
+ * Nécessaire parce que CanLII classe ses fiches sous un caseId propre à la langue
+ * (« 2008csc9 ») qui n'est pas toujours celui que l'analyseur construit
+ * (« 2008scc9 ») : n'interroger que l'identifiant construit ferait manquer le cache
+ * indéfiniment. Voir `lookupCase` (src/store/lookup.ts).
+ */
+export async function getCachedAny(
+  db: D1Database,
+  couples: ReadonlyArray<readonly [string, string]>,
+): Promise<CaseRow | null> {
+  if (couples.length === 0) return null;
+  const clauses = couples.map(() => "(database_id = ? AND case_id = ?)").join(" OR ");
+  const binds = couples.flatMap(([d, c]) => [d, c]);
+  const r = await db
+    .prepare(`SELECT * FROM cases WHERE ${clauses} LIMIT 1`)
+    .bind(...binds)
     .first<CaseRow>();
   return r ?? null;
 }

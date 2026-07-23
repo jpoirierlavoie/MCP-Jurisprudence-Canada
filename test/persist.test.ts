@@ -167,7 +167,11 @@ describe("requêtes FTS sûres", () => {
 });
 
 describe("conversion des réponses de l'API", () => {
-  it("aplatit caseId et extrait la citation neutre", () => {
+  it("CLÉE la fiche sur l'identifiant DEMANDÉ, pas sur celui que CanLII renvoie", () => {
+    // L'API rend `caseId` sous la clef de SA langue : on demande « 2008scc9 » et elle
+    // répond « {"fr": "2008csc9"} ». Clée sur la réponse, la fiche serait rangée là où
+    // aucune résolution ultérieure ne la cherche : le cache ne servirait jamais et
+    // chaque vérification rappellerait l'API. La langue renvoyée reste dans `lang`.
     const r = rowFromMetadata(
       {
         databaseId: "csc-scc",
@@ -182,8 +186,9 @@ describe("conversion des réponses de l'API", () => {
       { databaseId: "csc-scc", caseId: "2008scc9" },
       "lookup",
     );
-    expect(r.case_id).toBe("2008csc9");
-    expect(r.lang).toBe("fr");
+    expect(r.case_id).toBe("2008scc9"); // ce qu'on a demandé
+    expect(r.lang).toBe("fr"); // la langue sous laquelle CanLII l'a clée
+    expect(r.concatenated_id).toBe("2008csc-scc9"); // la forme canonique, conservée
     expect(r.neutral_cite).toBe("2008 CSC 9");
     expect(r.title_norm).toContain("nouveau brunswick");
   });

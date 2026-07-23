@@ -1,0 +1,8 @@
+{
+  "caseDatabases": [
+    { "databaseId": "csc-scc", "jurisdiction": "ca", "name": "Cour suprême du Canada" },
+    { "databaseId": "qcca", "jurisdiction": "qc", "name": "Cour d'appel du Québec" },
+    { "databaseId": "qccs", "jurisdiction": "qc", "name": "Cour supérieure du Québec" },
+    { "databaseId": "qccq", "jurisdiction": "qc", "name": "Cour du Québec" }
+  ]
+}

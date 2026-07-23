@@ -17,7 +17,7 @@ import type { CanliiClient } from "../canlii/client";
 import { CanliiBudgetError, CanliiError } from "../canlii/errors";
 import type { CaseMetadata, Lang } from "../canlii/types";
 import type { Directory, NeutralForm, Resolution, ResolvableForm } from "../citation/parse";
-import { type CaseRow, getCachedCase, rowFromMetadata, upsertCase } from "./cases";
+import { type CaseRow, getCachedAny, rowFromMetadata, upsertCase } from "./cases";
 import { confirmCourtCode, confirmParenCode } from "./databases";
 
 /** Au plus DEUX tentatives supplémentaires par citation (§6.4), budget compris. */
@@ -158,10 +158,23 @@ export async function lookupCase(
     };
   }
 
+  const essais = candidats(form, res, dir);
+
   // Cache (D5/D6) : les métadonnées d'une décision sont quasi immuables, le cache est
   // donc permanent. `refresh` est le seul moyen de le contourner.
+  //
+  // ⚠ On interroge le cache sur TOUS les identifiants candidats, pas seulement sur
+  //   celui qu'on vient de construire. Motif : CanLII CLASSE ses fiches sous un caseId
+  //   propre à la langue (« 2008csc9 » en français) qui n'est pas nécessairement celui
+  //   qu'on a construit (« 2008scc9 »). La fiche est donc persistée sous SON identifiant
+  //   à lui. Chercher uniquement l'identifiant construit ferait manquer le cache à
+  //   CHAQUE appel, pour toujours : la vérification resterait correcte, mais le cache
+  //   ne servirait jamais et chaque citation coûterait un appel à perpétuité.
   if (!opts.refresh) {
-    const cache = await getCachedCase(db, res.databaseId, res.caseId);
+    const cache = await getCachedAny(
+      db,
+      essais.map((c) => [c.databaseId, c.caseId] as const),
+    );
     if (cache)
       return { status: "trouvee", row: cache, provenance: "cache", fallback: null, message: null };
   }
@@ -178,7 +191,6 @@ export async function lookupCase(
     };
   }
 
-  const essais = candidats(form, res, dir);
   let dernierEchec: LookupResult | null = null;
 
   for (const [i, c] of essais.entries()) {
@@ -193,9 +205,14 @@ export async function lookupCase(
         now,
       );
       await upsertCase(db, row);
-      // Apprentissage du répertoire : on ne consigne QUE sur un rattrapage réussi —
-      // une résolution directe n'apprend rien qu'on ne sache déjà.
-      if (i > 0) await apprendre(db, form, c, meta, res);
+      // Apprentissage du répertoire (§6.4). Deux occasions, et la seconde compte
+      // autant que la première :
+      //   - un RATTRAPAGE a réussi (i > 0) : la correspondance amorcée était fausse ;
+      //   - la fiche revient sous un caseId DIFFÉRENT de celui qu'on a demandé, même
+      //     en résolution directe. C'est le cas fr/en (« 2008scc9 » demandé,
+      //     « 2008csc9 » rendu) : sans l'apprendre, on reconstruirait indéfiniment
+      //     l'identifiant que CanLII n'emploie pas, et le cache ne servirait jamais.
+      if (i > 0 || row.case_id !== c.caseId) await apprendre(db, form, c, meta, res, row.case_id);
       return {
         status: "trouvee",
         row,
@@ -247,24 +264,33 @@ export async function lookupCase(
   );
 }
 
-/** Consigne la correspondance qui a effectivement fonctionné (§6.4). */
+/**
+ * Consigne la correspondance qui a effectivement fonctionné (§6.4).
+ *
+ * @param caseIdRendu identifiant sous lequel CanLII a effectivement classé la fiche.
+ *   C'est LUI qui fait autorité, pas celui qu'on a demandé : c'est la seule façon de
+ *   converger sur le fragment propre à la langue (« csc » plutôt que « scc »).
+ */
 async function apprendre(
   db: D1Database,
   form: ResolvableForm,
   c: Candidat,
   meta: CaseMetadata,
   res: Resolution,
+  caseIdRendu?: string,
 ): Promise<void> {
   const concat = meta.concatenatedId ?? null;
   if (form.kind === "neutral") {
-    const fragment = c.caseidCode ?? extraireFragment(c.caseId, form) ?? form.code.toLowerCase();
+    const retenu = caseIdRendu ?? c.caseId;
+    const fragment =
+      extraireFragment(retenu, form) ?? c.caseidCode ?? form.code.toLowerCase();
     await confirmCourtCode(
       db,
       form.code,
       meta.databaseId || c.databaseId,
       fragment,
       concat,
-      `corrigé à l'usage (${c.voie}) : ${res.databaseId}/${res.caseId} -> ${c.databaseId}/${c.caseId}`,
+      `corrigé à l'usage (${c.voie}) : ${res.databaseId}/${res.caseId} -> ${meta.databaseId || c.databaseId}/${retenu}`,
     );
     return;
   }

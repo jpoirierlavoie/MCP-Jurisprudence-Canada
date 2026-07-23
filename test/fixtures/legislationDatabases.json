@@ -1,0 +1,6 @@
+{
+  "legislationDatabases": [
+    { "databaseId": "qcs", "type": "STATUTE", "jurisdiction": "qc", "name": "Lois du Québec" },
+    { "databaseId": "qcr", "type": "REGULATION", "jurisdiction": "qc", "name": "Règlements du Québec" }
+  ]
+}
