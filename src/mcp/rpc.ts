@@ -121,9 +121,22 @@ export interface ToolResult {
 /**
  * Sortie normale d'un outil : du TEXTE FRANÇAIS, pas du JSON (décision D4).
  *
- * ⚠ On n'émet PAS `structuredContent`, contrairement à `athena/mcp/tools.py` :
- *   `qclaw` ne le fait pas, la sortie est du texte destiné à être lu par un modèle,
- *   et la symétrie entre les deux connecteurs de Jason prime.
+ * ⚠ On n'émet PAS `structuredContent`, et aucun outil ne déclare d'`outputSchema`.
+ *
+ *   Ce n'est pas un retard sur le protocole : c'est un choix, réexaminé le
+ *   2026-07-23 et maintenu. Le motif tient en une phrase — la spécification MCP
+ *   recommande de fournir AUSSI le texte quand on fournit du structuré, mais
+ *   n'oblige aucun CLIENT à le montrer. Un client qui dispose d'un objet typé
+ *   s'en sert et laisse tomber la prose ; le verdict « CONFIRMÉE » arriverait
+ *   alors sans la phrase qui le borne, et `test/garde.test.ts` resterait VERT
+ *   puisque le texte contiendrait toujours l'avertissement que plus personne ne lit.
+ *
+ *   L'argument contraire, les conditions qui justifieraient de rouvrir la question,
+ *   et la forme qu'il faudrait alors adopter (un paramètre `format: "json"` dont la
+ *   charge utile porte l'avertissement en champ OBLIGATOIRE, de sorte que la réserve
+ *   voyage à l'intérieur des données) sont consignés en entier dans
+ *   `docs/decisions/001-sortie-texte-et-outputSchema.md`. Le lire avant d'ajouter
+ *   `structuredContent` ici.
  */
 export function ok(text: string): ToolResult {
   return { content: [{ type: "text", text }], isError: false };

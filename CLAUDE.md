@@ -51,6 +51,10 @@ node scripts/refresh-databases.mjs --remote --sql   # réconciliation §4.3
 3. **Les mises en garde de §2 vivent dans le CORPS des réponses**, pas seulement dans les
    descriptions d'outils. `test/garde.test.ts` échoue si elles disparaissent. Un test de
    garde qui échoue se **répare en remettant la garantie**, jamais en ajustant le test.
+   Corollaire : **pas de `structuredContent`, pas d'`outputSchema`** — un client qui reçoit
+   un objet typé laisse tomber la prose, et la réserve part avec elle SANS qu'aucun test
+   n'échoue. Argument complet, conditions de réouverture et forme à adopter le cas échéant :
+   `docs/decisions/001-sortie-texte-et-outputSchema.md`.
 4. **Ne jamais journaliser `request.url`** : le secret partagé est dans le chemin (§9.2).
    Aucune sortie d'outil ne contient d'URL `api.canlii.org` — elles portent la clef d'API.
 5. **La boucle d'auto-correction (§6.4) vit dans `src/store/lookup.ts`, en un seul

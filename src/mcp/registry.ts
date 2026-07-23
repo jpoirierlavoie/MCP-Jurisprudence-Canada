@@ -42,6 +42,17 @@ export interface ToolContext {
 export type ToolHandler = (args: Record<string, unknown>, ctx: ToolContext) => Promise<ToolResult>;
 
 export interface ToolDescriptor {
+  /**
+   * Libellé lisible, distinct de `name` (MCP 2025-06-18).
+   *
+   * C'est ce que le praticien lit dans l'invite d'AUTORISATION, au moment précis
+   * où il décide de laisser l'outil s'exécuter. « Sorts ultérieurs — indice
+   * heuristique » y est plus utile que `canlii_subsequent_history`, et la réserve
+   * portée par le titre se lit AVANT l'appel plutôt qu'après.
+   *
+   * Un client qui ignore ce champ retombe sur `name` : rien ne casse.
+   */
+  title: string;
   description: string;
   inputSchema: JsonSchema;
   handler: ToolHandler;
@@ -90,6 +101,7 @@ export const INSTRUCTIONS =
 export const TOOLS: Record<string, ToolDescriptor> = {
   // ── 7.1 — l'outil pivot ────────────────────────────────────────────────────
   canlii_verify_citations: {
+    title: "Vérifier des citations",
     description:
       "Vérifie une ou plusieurs citations de jurisprudence contre la collection de CanLII. " +
       "Pour chacune : un verdict (CONFIRMÉE, DISCORDANTE, INTROUVABLE, NON CONSTRUCTIBLE, " +
@@ -146,6 +158,7 @@ export const TOOLS: Record<string, ToolDescriptor> = {
 
   // ── 7.2 ────────────────────────────────────────────────────────────────────
   canlii_find_case: {
+    title: "Retrouver une décision par les parties",
     description:
       "Recherche une décision par les noms des parties ou un fragment d'intitulé, avec " +
       "tribunal et bornes de date facultatifs. Sert de rattrapage lorsque la citation n'est " +
@@ -192,6 +205,7 @@ export const TOOLS: Record<string, ToolDescriptor> = {
 
   // ── 7.3 ────────────────────────────────────────────────────────────────────
   canlii_get_case: {
+    title: "Fiche d'une décision",
     description:
       "Fiche officielle d'une décision : intitulé, citation, date, numéro de dossier de cour, " +
       "mots-clés et hyperlien canlii.ca. Accepte soit une citation (« 2020 QCCA 495 »), soit " +
@@ -213,6 +227,7 @@ export const TOOLS: Record<string, ToolDescriptor> = {
 
   // ── 7.4 ────────────────────────────────────────────────────────────────────
   canlii_citator: {
+    title: "Citateur — listes brutes",
     description:
       "Citateur : décisions citées PAR une décision (`cited`), décisions qui LA citent " +
       "(`citing`), ou dispositions législatives qu'elle cite (`legislation`). Les listes sont " +
@@ -246,6 +261,7 @@ export const TOOLS: Record<string, ToolDescriptor> = {
 
   // ── 7.5 ────────────────────────────────────────────────────────────────────
   canlii_subsequent_history: {
+    title: "Sorts ultérieurs — indice heuristique",
     description:
       "Indice heuristique de sorts ultérieurs : parmi les décisions qui citent la décision de " +
       "départ, retient celles qui émanent d'une juridiction supérieure et dont l'intitulé " +
@@ -269,6 +285,7 @@ export const TOOLS: Record<string, ToolDescriptor> = {
 
   // ── 7.6 ────────────────────────────────────────────────────────────────────
   canlii_browse_cases: {
+    title: "Décisions d'un tribunal",
     description:
       "Liste les décisions d'un tribunal, les plus récemment diffusées en tête, avec filtres " +
       "de date : date de la décision (`decision_date_*`), date de diffusion sur CanLII " +
@@ -305,6 +322,7 @@ export const TOOLS: Record<string, ToolDescriptor> = {
 
   // ── 7.7 ────────────────────────────────────────────────────────────────────
   canlii_list_databases: {
+    title: "Répertoire des tribunaux et corpus",
     description:
       "Répertoire des bases de CanLII : cours et tribunaux (`kind='case'`) ou corpus " +
       "législatifs (`kind='legislation'`), avec leur databaseId et leur ressort. Point de " +
@@ -329,6 +347,7 @@ export const TOOLS: Record<string, ToolDescriptor> = {
 
   // ── 7.8 ────────────────────────────────────────────────────────────────────
   canlii_browse_legislation: {
+    title: "Lois et règlements d'un corpus",
     description:
       "Liste les lois ou règlements d'une base législative (p. ex. « qcs » pour les lois du " +
       "Québec), avec leur legislationId, leur citation et leur type.",
@@ -349,6 +368,7 @@ export const TOOLS: Record<string, ToolDescriptor> = {
 
   // ── 7.9 ────────────────────────────────────────────────────────────────────
   canlii_get_legislation: {
+    title: "Fiche d'une loi ou d'un règlement",
     description:
       "Fiche d'une loi ou d'un règlement : citation, type, régime de dates (entrée en " +
       "vigueur), dates de début et de fin, indicateur d'abrogation et découpage en parties. " +
@@ -370,6 +390,7 @@ export const TOOLS: Record<string, ToolDescriptor> = {
 
   // ── 7.10 ───────────────────────────────────────────────────────────────────
   canlii_parse_citation: {
+    title: "Analyser une citation (hors ligne)",
     description:
       "Analyse une citation sans appeler CanLII : indique la forme reconnue (citation neutre, " +
       "citation attribuée par CanLII, recueil, identifiant d'éditeur), et, si elle est " +
@@ -391,6 +412,7 @@ export const TOOLS: Record<string, ToolDescriptor> = {
 export function listToolDescriptors(): Array<Record<string, unknown>> {
   return Object.entries(TOOLS).map(([name, t]) => ({
     name,
+    title: t.title,
     description: t.description,
     inputSchema: t.inputSchema,
     annotations: { ...READONLY },

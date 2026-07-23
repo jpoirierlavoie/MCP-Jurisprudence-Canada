@@ -70,6 +70,26 @@ describe("§2 — les dix outils existent et se décrivent", () => {
     }
   });
 
+  it("chacun porte un titre lisible, distinct du nom", () => {
+    for (const d of listToolDescriptors()) {
+      const titre = d.title as string;
+      expect(typeof titre, String(d.name)).toBe("string");
+      expect(titre.length, String(d.name)).toBeGreaterThan(3);
+      expect(titre, String(d.name)).not.toBe(d.name);
+      // Le titre est du français lisible, pas un identifiant recyclé.
+      expect(titre, String(d.name)).not.toMatch(/^canlii_/);
+    }
+  });
+
+  it("le titre des outils HEURISTIQUES porte leur réserve", () => {
+    // Le titre s'affiche dans l'invite d'autorisation : c'est le dernier endroit
+    // où la réserve peut être lue AVANT que l'outil ne s'exécute.
+    const t = Object.fromEntries(listToolDescriptors().map((d) => [d.name, d.title as string]));
+    expect(t.canlii_subsequent_history).toMatch(/heuristique/i);
+    expect(t.canlii_citator).toMatch(/brute/i);
+    expect(t.canlii_parse_citation).toMatch(/hors ligne/i);
+  });
+
   it("tous sont annotés en lecture seule et monde ouvert (§7)", () => {
     for (const d of listToolDescriptors()) {
       expect(d.annotations).toMatchObject({ readOnlyHint: true, openWorldHint: true });
