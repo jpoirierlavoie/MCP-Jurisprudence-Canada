@@ -224,10 +224,12 @@ le quota.
 
 ## Questions restées ouvertes
 
-- **§16.1 — moissonnage de masse.** `src/backfill.ts` existe, est testé, et **ne s'exécute
-  pas** : `BACKFILL_ENABLED=false` et aucun cron quotidien n'est déclaré. L'activer exige
-  donc deux gestes délibérés. La documentation de CanLII *suggère* cet usage sans
-  l'*autoriser* ; la question lui est réservée.
+- **§16.1 — moissonnage de masse : TRANCHÉ, ce sera non (2026-07-23).** Décision du
+  praticien : pas de téléchargement en masse. `src/backfill.ts` reste écrit et testé mais
+  **ne s'exécute pas** — `BACKFILL_ENABLED=false`, et aucun cron quotidien n'est déclaré,
+  de sorte que l'activer exigerait deux gestes délibérés. Le cache continue de se remplir
+  par l'usage (D6), ce qui est autre chose : la sédimentation des appels réellement faits,
+  et non un aspirateur. Rouvrir la question supposerait de la poser d'abord à CanLII.
 - **§16.2 — quota et débit.** Non publiés. Les valeurs par défaut sont prudentes (250 ms
   entre appels, 40 appels par invocation, aucune concurrence sortante) ; à ajuster après
   réponse de CanLII.

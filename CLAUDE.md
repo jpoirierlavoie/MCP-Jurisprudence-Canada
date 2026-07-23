@@ -78,8 +78,11 @@ node scripts/refresh-databases.mjs --remote --sql   # réconciliation §4.3
     refusée — tout est avalé.
 13. **Les fins de ligne sont LF dans la copie de travail** (`.gitattributes`) : sinon Biome
     local (CRLF sous Windows) et la CI (Linux) divergent en permanence.
-14. **§11 est inerte et doit le rester** jusqu'à la détermination de §16.1 auprès de CanLII.
-    Deux verrous : `BACKFILL_ENABLED="false"` et aucun cron quotidien déclaré.
+14. **§11 est inerte et le reste : la question est TRANCHÉE (2026-07-23) — pas de
+    moissonnage de masse.** Deux verrous : `BACKFILL_ENABLED="false"` et aucun cron
+    quotidien déclaré. Ce n'est plus une question ouverte mais une décision du
+    praticien : ne pas basculer le drapeau, même « pour essayer ». Le remplissage du
+    cache par l'usage (D6) n'est pas concerné — c'est autre chose.
 
 ## Procédure sûre
 
