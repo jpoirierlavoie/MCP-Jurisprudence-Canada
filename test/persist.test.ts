@@ -251,11 +251,30 @@ describe("citateur : TTL différencié et « vide » ≠ « jamais demandé »",
 });
 
 describe("répertoire et auto-correction", () => {
-  it("charge le répertoire d'amorçage des migrations", async () => {
+  it("charge le répertoire RÉCONCILIÉ des migrations (0002 puis 0003)", async () => {
     const dir = await loadDirectory(db);
     expect(dir.courtCodes.get("CSC")).toMatchObject({ database_id: "csc-scc", verified: 1 });
-    expect(dir.courtCodes.get("QCCA")).toMatchObject({ verified: 0 });
+    expect(dir.courtCodes.get("QCCA")).toMatchObject({ database_id: "qcca", verified: 1 });
     expect(dir.parenCodes.get("QC/CQ")).toMatchObject({ database_id: "qccq" });
+  });
+
+  it("la migration 0003 corrige les databaseId démentis par CanLII", async () => {
+    // Régression sur la réconciliation du 2026-07-23 : ces quatre correspondances
+    // ont été mesurées contre l'API vivante. Si 0002 était réappliquée seule sur une
+    // base neuve, les hypothèses fausses reviendraient — d'où cette garde.
+    const dir = await loadDirectory(db);
+    // « caf-fca » et « cf-fc » n'existent pas ; les bases réelles sont fca et fct.
+    expect(dir.courtCodes.get("CAF")).toMatchObject({ database_id: "fca", caseid_code: "caf" });
+    expect(dir.courtCodes.get("FCA")).toMatchObject({ database_id: "fca", caseid_code: "fca" });
+    expect(dir.courtCodes.get("CF")).toMatchObject({ database_id: "fct", caseid_code: "cf" });
+    expect(dir.courtCodes.get("FC")).toMatchObject({ database_id: "fct", caseid_code: "fc" });
+    // Le fragment FRANÇAIS de la Cour canadienne de l'impôt est « cci », non « tcc ».
+    expect(dir.courtCodes.get("CCI")).toMatchObject({ database_id: "cci-tcc", caseid_code: "cci" });
+    // Le TAL a gardé le databaseId de la Régie du logement.
+    expect(dir.courtCodes.get("QCTAL")).toMatchObject({
+      database_id: "qcrdl",
+      caseid_code: "qctal",
+    });
   });
 
   it("un répertoire vide ou vieux de plus de 7 jours est périmé", async () => {

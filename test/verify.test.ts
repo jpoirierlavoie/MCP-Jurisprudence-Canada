@@ -8,6 +8,7 @@ import { env } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { callTool } from "../src/mcp/registry";
+import { rowFromListItem, upsertCases } from "../src/store/cases";
 import dunsmuir from "./fixtures/dunsmuir.json";
 import qcca2005 from "./fixtures/qcca2005.json";
 import { fakeClient, resetDb, seedDatabases, texte, toolCtx } from "./helpers";
@@ -181,6 +182,61 @@ describe("une panne réseau n'est PAS une absence", () => {
     expect(t).toContain("INDÉTERMINÉE");
     expect(t).toContain("PAS un constat d'absence");
     expect(t).not.toContain("INTROUVABLE");
+  });
+});
+
+describe("une fiche de balayage ne peut pas servir de vérification", () => {
+  it("refetch quand le cache ne contient qu'une ligne de BALAYAGE", async () => {
+    // Situation réelle : `canlii_browse_cases` a moissonné la base, puis on vérifie
+    // une citation. La ligne moissonnée n'a ni date, ni dossier, ni hyperlien.
+    await upsertCases(env.DB, [
+      rowFromListItem(
+        {
+          databaseId: "csc-scc",
+          caseId: { en: "2008scc9" },
+          title: "Dunsmuir c. Nouveau-Brunswick",
+          citation: "2008 CSC 9 (CanLII)",
+        },
+        "csc-scc",
+        "fr",
+        "sweep",
+      )!,
+    ]);
+
+    const { texte: t, client } = await verifier([{ citation: "2008 CSC 9" }], {
+      [CHEMIN_DUNSMUIR]: dunsmuir,
+    });
+
+    // L'appel a bien eu lieu malgré la présence d'une ligne en cache…
+    expect(client.chemins).toEqual([CHEMIN_DUNSMUIR]);
+    // …et la fiche rendue est complète.
+    expect(t).toContain("31459");
+    expect(t).toContain("canlii.ca");
+  });
+
+  it("le contrôle d'ANNÉE n'est jamais sauté en silence", async () => {
+    // Le cœur du défaut : sans date, `comparer()` ne compare pas l'année et rendrait
+    // CONFIRMÉE une citation dont l'année est fausse.
+    await upsertCases(env.DB, [
+      rowFromListItem(
+        {
+          databaseId: "csc-scc",
+          caseId: { en: "2008scc9" },
+          title: "Dunsmuir c. Nouveau-Brunswick",
+          citation: "2008 CSC 9 (CanLII)",
+        },
+        "csc-scc",
+        "fr",
+        "sweep",
+      )!,
+    ]);
+
+    const { texte: t } = await verifier([{ citation: "2008 CSC 9", expected_year: 1999 }], {
+      [CHEMIN_DUNSMUIR]: dunsmuir,
+    });
+    expect(t).toContain("DISCORDANTE");
+    expect(t).toContain("1999");
+    expect(t).toContain("2008");
   });
 });
 

@@ -31,13 +31,30 @@ describe("§7.10 — canlii_parse_citation", () => {
     expect(out).toContain("canlii_verify_citations");
   });
 
-  it("annonce « probable » pour une ligne d'amorçage non confirmée", async () => {
+  it("annonce « oui » pour une correspondance réconciliée", async () => {
+    // Depuis la migration 0003, QCCA est confirmé par observation.
     const r = await callTool(
       "canlii_parse_citation",
       { citation: "2020 QCCA 495" },
       toolCtx(fakeClient({})),
     );
-    expect(texte(r)).toContain("probable");
+    const out = texte(r);
+    expect(out).toContain("qcca");
+    expect(out).toContain("2020qcca495");
+    expect(out).toContain("Constructible : oui");
+  });
+
+  it("annonce « probable » pour un code ABSENT du répertoire", async () => {
+    // Le rang « probable » n'est pas décoratif : il commande la suite (on tente
+    // l'appel, on consigne le résultat). Il faut donc qu'il subsiste après 0003.
+    const r = await callTool(
+      "canlii_parse_citation",
+      { citation: "2020 XXQQ 12" },
+      toolCtx(fakeClient({})),
+    );
+    const out = texte(r);
+    expect(out).toContain("Constructible : probable");
+    expect(out).toContain("absent du répertoire");
   });
 
   it("expose les formes parallèles d'une citation doctrinale", async () => {
@@ -64,10 +81,24 @@ describe("§7.7 — canlii_list_databases", () => {
     expect(client.chemins).toEqual(["caseBrowse/fr/", "legislationBrowse/fr/"]);
     expect(out).toContain("Cour d'appel du Québec");
     expect(out).toContain("Corpus législatifs");
-    // Les lignes fédérales amorcées ne figurent pas au répertoire figé : §4.3 exige
-    // qu'elles soient SIGNALÉES avant toute mise en service.
+  });
+
+  it("SIGNALE toute correspondance démentie par le répertoire réel (§4.3)", async () => {
+    // Le répertoire est réconcilié depuis 0003 : pour éprouver la barrière, on
+    // introduit une correspondance fausse et l'on vérifie qu'elle est DÉNONCÉE.
+    // C'est le seul garde-fou qui empêche de livrer des hypothèses non vérifiées.
+    await env.DB.prepare(
+      "INSERT INTO court_codes (code, database_id, caseid_code, jurisdiction, lang, verified, note) VALUES ('ZZTEST','zz-inexistante','zz','zz',NULL,0,'hypothèse de test')",
+    ).run();
+
+    const client = fakeClient({
+      "caseBrowse/fr/": caseDatabases,
+      "legislationBrowse/fr/": legislationDatabases,
+    });
+    const out = texte(await callTool("canlii_list_databases", { refresh: true }, toolCtx(client)));
+
     expect(out).toContain("RÉCONCILIATION REQUISE");
-    expect(out).toContain("CAF -> caf-fca");
+    expect(out).toContain("ZZTEST -> zz-inexistante");
   });
 
   it("filtre par ressort et par nom plié (« quebec » trouve « Québec »)", async () => {

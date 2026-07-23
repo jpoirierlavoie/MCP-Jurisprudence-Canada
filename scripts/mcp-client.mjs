@@ -17,6 +17,7 @@
  */
 
 import { readFileSync } from "node:fs";
+import { pathToFileURL } from "node:url";
 
 const LOCAL_BASE = process.env.MCP_LOCAL_BASE ?? "http://127.0.0.1:8787";
 
@@ -111,7 +112,14 @@ export function texte(resultat) {
 
 // ── Exécution directe ─────────────────────────────────────────────────────────
 
-const estPrincipal = import.meta.url === `file://${process.argv[1]?.replace(/\\/g, "/")}`;
+// ⚠ `pathToFileURL`, et surtout PAS une concaténation « file:// » + chemin.
+//   Sous Windows, `process.argv[1]` vaut « C:\…\mcp-client.mjs » ; concaténé, cela
+//   donne « file://C:/… » (deux barres) là où Node produit « file:///C:/… » (trois).
+//   La comparaison échouait donc TOUJOURS : le script se terminait avec un code 0 et
+//   sans rien afficher — le pire des échecs, celui qui a l'air d'un succès.
+const estPrincipal = Boolean(
+  process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href,
+);
 if (estPrincipal) {
   const args = process.argv.slice(2);
   const mode = args.find((a) => a === "--local" || a === "--remote") ?? "--local";

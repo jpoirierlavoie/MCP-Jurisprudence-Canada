@@ -175,8 +175,24 @@ export async function lookupCase(
       db,
       essais.map((c) => [c.databaseId, c.caseId] as const),
     );
-    if (cache)
+    // ⚠ Une fiche issue d'un BALAYAGE ne suffit PAS à répondre à une vérification.
+    //
+    //   Une réponse de liste ne porte que quatre champs (annexe B) : ni date de
+    //   décision, ni numéro de dossier, ni mots-clés, ni hyperlien. Servir une telle
+    //   ligne depuis le cache aurait deux effets, dont le second est grave :
+    //     1. la fiche rendue serait appauvrie (date « — », aucun hyperlien) ;
+    //     2. surtout, `comparer()` n'effectue le contrôle d'ANNÉE que si
+    //        `decision_date` existe. Sur une ligne de balayage, ce contrôle serait
+    //        donc SILENCIEUSEMENT SAUTÉ : une citation dont l'année est fausse
+    //        ressortirait CONFIRMÉE alors qu'`expected_year` n'a jamais été comparée.
+    //   Une garantie qui disparaît sans bruit est exactement ce que §2 interdit.
+    //
+    //   On ne sert donc du cache que les fiches obtenues par RÉSOLUTION DIRECTE
+    //   (`source = 'lookup'`), seules complètes. Une ligne de balayage est conservée
+    //   pour l'INDEX de recherche — c'est son rôle — mais déclenche ici un appel.
+    if (cache && cache.source === "lookup") {
       return { status: "trouvee", row: cache, provenance: "cache", fallback: null, message: null };
+    }
   }
 
   if (dir.knownDatabases.size > 0 && !dir.knownDatabases.has(res.databaseId)) {
