@@ -169,6 +169,42 @@ function methodNotAllowed(origin: string | null = null): Response {
   });
 }
 
+/**
+ * Limitation de débit (§9.3) : 60 requêtes/minute par IP, dans le Worker.
+ *
+ * ⚠ FAIL OPEN délibéré. Si le binding manque (développement local, mauvaise
+ *   configuration) ou si l'appel échoue, on LAISSE PASSER.
+ *
+ *   Ce choix se justifie parce que la limitation de débit n'est PAS le contrôle
+ *   d'accès : l'authentification, elle, échoue fermée (sans `MCP_SHARED_SECRET`,
+ *   tout est refusé). Ici, la seule chose protégée est le coût — requêtes Workers
+ *   facturables et quota CanLII. Échouer fermé sur un compteur indisponible
+ *   rendrait le connecteur inutilisable pour protéger une facture, ce qui est le
+ *   mauvais arbitrage.
+ */
+async function debitAcceptable(request: Request, env: Env): Promise<boolean> {
+  const limiteur = env.RATE_LIMITER;
+  if (!limiteur) return true;
+  // L'IP du client vue par Cloudflare. La documentation déconseille l'IP comme clef
+  // dans le cas général (elle est partagée derrière un NAT) ; pour un connecteur
+  // mono-usager, deux usagers derrière la même sortie partageraient un budget de
+  // 60/min, ce qui est sans portée pratique ici.
+  const ip = request.headers.get("CF-Connecting-IP") ?? "sans-ip";
+  try {
+    const { success } = await limiteur.limit({ key: ip });
+    return success;
+  } catch {
+    return true;
+  }
+}
+
+function tooManyRequests(origin: string | null): Response {
+  return new Response(JSON.stringify({ error: "rate_limited" }), {
+    status: 429,
+    headers: { ...JSON_HEADERS, "Retry-After": "60", ...corsHeaders(origin) },
+  });
+}
+
 /** Origine de navigateur présente mais non reconnue (§ défense ré-attachement DNS). */
 function forbiddenOrigin(): Response {
   return new Response(JSON.stringify({ error: "forbidden_origin" }), {
@@ -207,6 +243,15 @@ export default {
       // Pré-vol CORS AVANT l'authentification : le navigateur l'émet sans en-tête
       // d'authentification. L'exiger ici casserait le connecteur sans rien protéger.
       if (request.method === "OPTIONS" && origin) return preflight(origin);
+
+      // Limitation de débit APRÈS le pré-vol, et avant tout le reste (§9.3).
+      //
+      // L'ordre est délibéré des deux côtés : un 429 sur un pré-vol casserait le
+      // connecteur de façon incompréhensible (le navigateur ne rapporte qu'un échec
+      // CORS), tandis que limiter AVANT le contrôle de méthode et l'authentification
+      // fait que même une rafale de requêtes mal formées ou mal authentifiées cesse
+      // de coûter — ce qui est précisément l'objet de la mesure.
+      if (!(await debitAcceptable(request, env))) return tooManyRequests(origin);
 
       // Aucun flux SSE, aucune session à supprimer : mode JSON sans état (D3).
       if (request.method !== "POST") return methodNotAllowed(origin);

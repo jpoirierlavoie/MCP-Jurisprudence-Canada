@@ -175,8 +175,14 @@ concurrentes) · `[1985] C.A. 105` NON CONSTRUCTIBLE (avec renvoi à `canlii_fin
 - Ajouter le connecteur dans `claude.ai` : URL
   `https://jurisprudence.poirierlavoie.ca/mcp/<secret>`, nom
   « Jurisprudence canadienne (CanLII) ».
-- Créer la règle de limitation de débit au tableau de bord Cloudflare : **60 requêtes/minute
-  par IP**, action « bloquer ». Défense en profondeur si le secret fuit (§9.3).
+- ~~Créer une règle de limitation de débit au tableau de bord~~ — **fait, mais autrement**
+  (2026-07-23). La limitation de débit de §9.3 est implémentée **dans le Worker**
+  (binding `ratelimits`, 60 requêtes/minute par IP), et non par une règle WAF de zone :
+  celle-ci dépend du forfait de la ZONE, indisponible ici malgré l'abonnement Pro. Le
+  résultat est meilleur — la règle est versionnée, relue et testée, et surtout elle vise
+  `/mcp` **sans avoir à écrire un motif de chemin** ; or ce chemin contient le secret, et
+  une expression WAF est visible au tableau de bord comme dans les journaux d'audit.
+  Aucune action manuelle n'est requise.
 - Après une semaine d'usage, dépouiller `search_log` et corriger l'analyseur sur les formes
   réellement rencontrées :
 

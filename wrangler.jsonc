@@ -26,6 +26,30 @@
     "subrequests": 200
   },
 
+  // Limitation de débit (§9.3), 60 requêtes/minute par IP.
+  //
+  // ⚠ Implémentée DANS le Worker et non par une règle WAF de zone : la limitation de
+  //   débit du WAF dépend du forfait de la ZONE (et n'était pas accessible ici),
+  //   alors que ce binding vient avec Workers. Le résultat est meilleur pour ce
+  //   dépôt : la règle est versionnée, relue en revue, éprouvée par des tests, et
+  //   surtout elle vise `/mcp` sans avoir à écrire un motif de chemin — or ce chemin
+  //   CONTIENT le secret partagé, et une expression WAF est visible au tableau de
+  //   bord comme dans les journaux d'audit.
+  //
+  //   Deux limites à connaître, énoncées plutôt que découvertes :
+  //     - le compteur est LOCAL À CHAQUE EMPLACEMENT Cloudflare : un client réparti
+  //       sur plusieurs points de présence obtient 60/min PAR emplacement. C'est une
+  //       protection contre l'emballement et le coût, pas contre un attaquant réparti ;
+  //     - le compte est éventuellement cohérent, jamais exact au coup près.
+  //   Pour ce connecteur mono-usager, les deux sont sans conséquence.
+  "ratelimits": [
+    {
+      "name": "RATE_LIMITER",
+      "namespace_id": "1001",
+      "simple": { "limit": 60, "period": 60 }
+    }
+  ],
+
   "d1_databases": [
     {
       "binding": "DB",

@@ -89,6 +89,23 @@ Known and accepted properties of this model:
 - Rotating the secret is a single `wrangler secret put MCP_SHARED_SECRET` followed by
   updating the connector URL; no redeployment of code is required.
 
+**Rate limiting.** The endpoint is limited to **60 requests per minute per IP**, enforced
+inside the Worker via the `ratelimits` binding rather than by a zone WAF rule. Two
+properties are worth stating rather than leaving to be discovered:
+
+- The counter is **local to each Cloudflare location** and eventually consistent. A client
+  spread across points of presence gets 60/min *per location*. This protects against
+  runaway loops and request cost — it is not a defence against a distributed attacker.
+- It **fails open**: if the binding is missing or the call throws, the request proceeds.
+  That is deliberate, and the asymmetry is the point — authentication fails *closed* (with
+  no `MCP_SHARED_SECRET`, everything is refused), whereas rate limiting protects only
+  cost. Failing closed on an unavailable counter would take the connector down to protect
+  a bill.
+
+The limit is applied after the CORS preflight (a 429 on a preflight surfaces to a browser
+only as an opaque CORS failure) and *before* authentication, so a burst of badly
+authenticated requests stops costing anything.
+
 ## Reproducing the test suite
 
 The full suite runs offline against frozen fixtures — **no API key, no network, no

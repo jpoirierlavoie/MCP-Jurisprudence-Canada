@@ -179,6 +179,96 @@ describe("CORS — sans quoi claude.ai ne peut pas joindre le serveur", () => {
   });
 });
 
+describe("§9.3 — limitation de débit", () => {
+  const SECRET_URL = `https://x/mcp/${SECRET}`;
+  /** Faux limiteur : accepte `n` requêtes puis refuse. */
+  const limiteur = (n: number) => {
+    let vues = 0;
+    return { limit: async () => ({ success: ++vues <= n }) };
+  };
+
+  it("répond 429 avec Retry-After une fois le seuil franchi", async () => {
+    const e = envAvec({ RATE_LIMITER: limiteur(1) });
+    const appel = async () => {
+      const ctx = createExecutionContext();
+      const r = await worker.fetch(
+        new Request(SECRET_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(rpc("ping")),
+        }),
+        e,
+        ctx,
+      );
+      await waitOnExecutionContext(ctx);
+      return r;
+    };
+    expect((await appel()).status).toBe(200);
+    const refus = await appel();
+    expect(refus.status).toBe(429);
+    expect(refus.headers.get("Retry-After")).toBe("60");
+  });
+
+  it("le PRÉ-VOL n'est JAMAIS limité", async () => {
+    // Un 429 sur un pré-vol ne remonte au navigateur que comme un échec CORS
+    // opaque : le connecteur casserait sans que le motif soit lisible nulle part.
+    const e = envAvec({ RATE_LIMITER: limiteur(0) });
+    const ctx = createExecutionContext();
+    const res = await worker.fetch(
+      new Request(SECRET_URL, {
+        method: "OPTIONS",
+        headers: { Origin: "https://claude.ai", "Access-Control-Request-Method": "POST" },
+      }),
+      e,
+      ctx,
+    );
+    await waitOnExecutionContext(ctx);
+    expect(res.status).toBe(204);
+  });
+
+  it("limite AVANT l'authentification : une rafale mal authentifiée cesse de coûter", async () => {
+    const e = envAvec({ RATE_LIMITER: limiteur(0) });
+    const ctx = createExecutionContext();
+    const res = await worker.fetch(
+      new Request("https://x/mcp/mauvais-secret", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(rpc("ping")),
+      }),
+      e,
+      ctx,
+    );
+    await waitOnExecutionContext(ctx);
+    expect(res.status).toBe(429); // et non 401 : on n'a même pas comparé le secret
+  });
+
+  it("FAIL OPEN : binding absent ou en panne => la requête passe", async () => {
+    // La limitation protège le COÛT, pas l'accès. Échouer fermé sur un compteur
+    // indisponible rendrait le connecteur inutilisable pour protéger une facture.
+    for (const rl of [
+      undefined,
+      {
+        limit: async () => {
+          throw new Error("panne");
+        },
+      },
+    ]) {
+      const ctx = createExecutionContext();
+      const res = await worker.fetch(
+        new Request(SECRET_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(rpc("ping")),
+        }),
+        envAvec({ RATE_LIMITER: rl }),
+        ctx,
+      );
+      await waitOnExecutionContext(ctx);
+      expect(res.status).toBe(200);
+    }
+  });
+});
+
 describe("§8 — routage", () => {
   it("GET /health répond 200 sans authentification", async () => {
     const ctx = createExecutionContext();
