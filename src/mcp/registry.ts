@@ -1,11 +1,25 @@
 /**
- * Registre des dix outils (spécification §7).
+ * Registre des treize outils (spécification §7 et §17).
  *
  * ⚠ LES DESCRIPTIONS SONT REPRISES VERBATIM DE §7 ET NE DOIVENT PAS ÊTRE
  *   REFORMULÉES. Elles portent elles-mêmes leurs mises en garde : c'est le second
  *   canal de fiabilité, après le corps des réponses. Le motif est celui de
  *   `GARDE_FOU` dans le Worker `legislation` — une description d'outil est une
  *   surface de contrat, pas de la prose.
+ *
+ * ╔══════════════════════════════════════════════════════════════════════════════╗
+ * ║ DEUX FAMILLES DE PRÉFIXES, ET LA FRONTIÈRE EST SÉMANTIQUE (D8, §17).          ║
+ * ║                                                                              ║
+ * ║   `canlii_*`            la réponse vient de la COLLECTION DE CANLII, et sa    ║
+ * ║   (10 outils)           couverture comme ses verdicts en dépendent.          ║
+ * ║                                                                              ║
+ * ║   `greffe_*` `palais_*` la réponse vient d'un RELEVÉ LOCAL du ministère de    ║
+ * ║   (3 outils)            la Justice du Québec, daté, sans aucun appel.        ║
+ * ║                                                                              ║
+ * ║ Préfixer les seconds en `canlii_` attribuerait à CanLII une adresse de palais ║
+ * ║ dont il n'est pas la source. La scission est VÉRIFIÉE par test/rpc.test.ts :  ║
+ * ║ elle ne tient pas qu'à cette note.                                           ║
+ * ╚══════════════════════════════════════════════════════════════════════════════╝
  *
  * Conventions communes appliquées sans exception :
  *   - nom d'outil en anglais, description ET sortie en français ;
@@ -24,7 +38,10 @@ import { findCase } from "./handlers/findCase";
 import { getCase } from "./handlers/getCase";
 import { getLegislation } from "./handlers/getLegislation";
 import { listDatabasesTool } from "./handlers/listDatabases";
+import { palaisGetTool } from "./handlers/palaisGet";
+import { palaisListTool } from "./handlers/palaisList";
 import { parseCitationTool } from "./handlers/parseCitation";
+import { parseCourtFileTool } from "./handlers/parseCourtFile";
 import { subsequentHistory } from "./handlers/subsequentHistory";
 import { verifyCitations } from "./handlers/verifyCitations";
 import { err, type ToolResult } from "./rpc";
@@ -405,6 +422,100 @@ export const TOOLS: Record<string, ToolDescriptor> = {
       additionalProperties: false,
     },
     handler: parseCitationTool,
+  },
+
+  // ══ §17 — greffes et palais du Québec. HORS CANLII : relevé local, aucun appel. ══
+
+  // ── 17.2 ───────────────────────────────────────────────────────────────────
+  greffe_parse_court_file_number: {
+    title: "Numéro de dossier de cour du Québec (hors ligne)",
+    description:
+      "Analyse un numéro de dossier de cour du Québec (NNN-NN-NNNNNN-NNN) et en tire le greffe " +
+      "— palais de justice et district judiciaire — puis la juridiction : tribunal, compétence, " +
+      "type de greffe. Un préfixe alphabétique (TAL, TAQ, C.F.…) désigne un tribunal administratif " +
+      "ou une cour fédérale, qui numérotent leurs dossiers eux-mêmes. Données de référence LOCALES, " +
+      "relevées auprès du ministère de la Justice du Québec : cet outil n'interroge ni CanLII ni " +
+      "aucun registre, et n'établit donc PAS que le dossier existe ou qu'il est actif. Les positions " +
+      "7 et suivantes ne sont pas analysées ; aucune somme de contrôle n'est vérifiée.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        court_file_number: {
+          type: "string",
+          minLength: 1,
+          maxLength: 40,
+          description: "Le numéro brut, p. ex. « 500-05-123456-241 » ou « TAL-594531 ».",
+        },
+      },
+      required: ["court_file_number"],
+      additionalProperties: false,
+    },
+    handler: parseCourtFileTool,
+  },
+
+  // ── 17.3 ───────────────────────────────────────────────────────────────────
+  palais_list: {
+    title: "Palais de justice du Québec — répertoire",
+    description:
+      "Répertorie les palais de justice et points de service de justice du Québec, avec leur " +
+      "adresse municipale, les numéros de greffe qui y siègent et leur district judiciaire. " +
+      "Filtrable par district, par type de lieu ou par texte libre (nom, ville, numéro de greffe). " +
+      "Relevé auprès du ministère de la Justice du Québec le 2026-07-15 : les adresses DÉMÉNAGENT, " +
+      "et ce connecteur ne porte aucune coordonnée téléphonique ni courriel. Vérifier la liste " +
+      "officielle du Ministère avant toute signification ou tout dépôt.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        district: {
+          type: "string",
+          maxLength: 60,
+          description: "District judiciaire, p. ex. « Montréal ». Les diacritiques sont pliés.",
+        },
+        query: {
+          type: "string",
+          maxLength: 60,
+          description: "Texte libre : nom du palais, ville ou numéro de greffe.",
+        },
+        type: {
+          type: "string",
+          enum: ["palais", "point_de_service"],
+          description:
+            "« palais » (43) ou « point_de_service » (8, au sens du MJQ — à ne pas confondre " +
+            "avec les greffes de cour itinérante).",
+        },
+      },
+      additionalProperties: false,
+    },
+    handler: palaisListTool,
+  },
+
+  // ── 17.4 ───────────────────────────────────────────────────────────────────
+  palais_get: {
+    title: "Palais de justice du Québec — fiche",
+    description:
+      "Fiche d'un lieu de justice du Québec, par numéro de greffe (3 chiffres) OU par nom de " +
+      "palais : adresse municipale, adresse postale distincte le cas échéant, greffes qui y " +
+      "siègent, district judiciaire et, pour une cour itinérante, les localités desservies. " +
+      "Relevé LOCAL auprès du ministère de la Justice du Québec, sans appel sortant. Six greffes " +
+      "n'ont aucune adresse publiée : l'outil le dit sans jamais affirmer qu'il n'en existe pas. " +
+      "Aucune coordonnée téléphonique ni courriel n'est portée par ce connecteur.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        greffe_number: {
+          type: "string",
+          maxLength: 3,
+          description: "Numéro de greffe à 3 chiffres, p. ex. « 500 ».",
+        },
+        palais: {
+          type: "string",
+          maxLength: 60,
+          description: "Nom ou clef du palais, p. ex. « Montréal » ou « saint-jerome ».",
+        },
+      },
+      additionalProperties: false,
+    },
+    handler: palaisGetTool,
   },
 };
 

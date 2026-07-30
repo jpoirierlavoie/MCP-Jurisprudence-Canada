@@ -394,9 +394,9 @@ describe("§8 — méthodes JSON-RPC", () => {
       };
     };
     const outils = body.result.tools;
-    expect(outils).toHaveLength(10);
+    expect(outils).toHaveLength(13);
     for (const t of outils) {
-      expect(t.name).toMatch(/^canlii_/);
+      expect(t.name).toMatch(/^(canlii|greffe|palais)_/);
       expect(t.description.length).toBeGreaterThan(80);
       expect(t.annotations).toEqual({ readOnlyHint: true, openWorldHint: true });
       // §7, conventions : additionalProperties false sur TOUS les schémas.
@@ -414,8 +414,33 @@ describe("§8 — méthodes JSON-RPC", () => {
         "canlii_parse_citation",
         "canlii_subsequent_history",
         "canlii_verify_citations",
+        "greffe_parse_court_file_number",
+        "palais_get",
+        "palais_list",
       ].sort(),
     );
+  });
+
+  /**
+   * La frontière de §17 : `canlii_` promet que la réponse vient de la collection de
+   * CanLII. Un outil servi sous ce préfixe alors qu'il lit une table locale
+   * attribuerait à CanLII une donnée dont il n'est pas la source — l'inverse exact de
+   * ce que D8 protège. Ce test fait de la scission une CONTRAINTE, non une note.
+   */
+  it("le préfixe dit la SOURCE : canlii_ pour CanLII, greffe_/palais_ pour le relevé local", async () => {
+    const res = await appeler(rpc("tools/list"));
+    const body = (await res.json()) as { result: { tools: Array<{ name: string }> } };
+    const noms = body.result.tools.map((t) => t.name);
+
+    const canlii = noms.filter((n) => n.startsWith("canlii_"));
+    const locaux = noms.filter((n) => n.startsWith("greffe_") || n.startsWith("palais_"));
+
+    expect(canlii).toHaveLength(10);
+    expect(locaux).toHaveLength(3);
+    // Aucun outil ne relève des deux familles, et aucun n'échappe aux deux.
+    expect(canlii.length + locaux.length).toBe(noms.length);
+    // Les outils locaux ne portent JAMAIS la marque de CanLII, nulle part dans le nom.
+    for (const n of locaux) expect(n).not.toMatch(/canlii/i);
   });
 
   it("une méthode inconnue rend -32601", async () => {
