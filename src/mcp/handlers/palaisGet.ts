@@ -63,7 +63,7 @@ export async function palaisGetTool(
       const localites = localitesItinerantes(greffeNumber);
       if (localites.length > 0) {
         lignes.push(
-          `${pluriel(localites.length, "Localité desservie", "Localités desservies")} : ${localites.join(", ")}.`,
+          `${pluriel(localites.length, "localité desservie", "localités desservies")} : ${localites.join(", ")}.`,
         );
       }
     }
