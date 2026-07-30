@@ -1,4 +1,4 @@
-# Spécification — Connecteur MCP « Jurisprudence canadienne (CanLII) »
+# Spécification — Connecteur MCP « Jurisprudence canadienne et greffes du Québec »
 
 **Destinataire :** Claude Code
 **Auteur de la spéc. :** (préparé pour Jason Poirier Lavoie)
@@ -839,7 +839,7 @@ Dépôt GitHub distinct, calqué sur les protections d'Athéna : **actions épin
 6. `wrangler deploy`.
 7. **Amorçage du répertoire** : appeler `canlii_list_databases` avec `refresh: true`, puis réconcilier `court_codes` et `paren_codes` (§4.3) ; passer `verified = 1` sur les lignes confirmées.
 8. **Recette manuelle** : vérifier `2008 CSC 9` (⇒ *Dunsmuir*), une décision de la Cour d'appel du Québec connue, une citation volontairement fausse (`2020 QCCA 999999` ⇒ `INTROUVABLE`), une citation de recueil (⇒ `NON CONSTRUCTIBLE` avec candidats).
-9. Ajouter le connecteur dans `claude.ai` : URL `https://jurisprudence.poirierlavoie.ca/mcp/<secret>`, nom « Jurisprudence canadienne (CanLII) ».
+9. Ajouter le connecteur dans `claude.ai` : URL `https://jurisprudence.poirierlavoie.ca/mcp/<secret>`, nom « Jurisprudence canadienne et greffes du Québec ».
 10. Activer la règle de limitation de débit (§9.3).
 11. Après une semaine d'usage : dépouiller `search_log` (§10) et corriger l'analyseur sur les formes réellement rencontrées.
 
@@ -868,6 +868,52 @@ Dépôt GitHub distinct, calqué sur les protections d'Athéna : **actions épin
 4. **Modèle d'authentification.** Secret partagé (D7) retenu pour la v1. Confirmer, ou demander OAuth 2.1 dès le départ (§9.4).
 5. **Bases à indexer** si §11 est activé — proposition : `qcca`, `qccs`, `qccq`, `qctal`.
 6. **Langue de la spécification.** Rédigée en français, comme `claude_spec-elabore-theorie-de-la-cause.md`. Le code, les identifiants et les noms d'outils restent en anglais.
+
+---
+
+## 17. Extension — greffes et palais du Québec (HORS CanLII)
+
+*Ajoutée le 2026-07-30. Les §1 à §16 décrivent un connecteur adossé à la seule collection de CanLII ; la présente section étend le connecteur à des données d'une AUTRE provenance, et pose la frontière entre les deux.*
+
+### 17.1 La frontière des sources, et pourquoi elle est dans le nom des outils
+
+La décision **D8** conserve le préfixe `canlii_` parce que « la couverture et les verdicts DÉPENDENT de la collection de CanLII et que le modèle doit le savoir ». Le même raisonnement, appliqué à des données qui ne viennent PAS de CanLII, impose la conclusion inverse : leur donner le préfixe `canlii_` attribuerait à CanLII une adresse de palais de justice dont il n'est pas la source. D'où **deux familles** :
+
+| Préfixe | Source | Appels sortants | Mode de panne redouté |
+|---|---|---|---|
+| `canlii_` (10) | collection de CanLII | oui | l'absence prise pour une inexistence |
+| `greffe_`, `palais_` (3) | relevé local du ministère de la Justice du Québec (MJQ) | **aucun** | la **péremption** prise pour une vérité |
+
+La scission est **vérifiée par `test/rpc.test.ts`** : aucun outil ne relève des deux familles ni n'échappe aux deux, et aucun outil local ne porte la chaîne `canlii` dans son nom. Ajouter un outil oblige donc à choisir sa famille délibérément.
+
+### 17.2 `greffe_parse_court_file_number`
+
+Analyse `NNN-NN-NNNNNN-NNN` : positions 1-3 le greffe (palais + district judiciaire), positions 5-6 la juridiction (tribunal + compétence + type de greffe). **Les positions 7 et suivantes ne sont PAS analysées** : il n'existe ni somme de contrôle ni règle d'année, et en inventer une rejetterait des numéros valides.
+
+Un **préfixe alphabétique** (`TAL-`, `TAQ-`, `C.F.-`…) désigne un corps qui numérote ses dossiers lui-même : le préfixe EST la réponse à « quel tribunal ». Il se résout contre la table des forums, insensiblement aux points (`C.F.` ≡ `CF`). `is_administrative` n'est vrai que pour la catégorie *administratif* — **une cour fédérale n'est pas un tribunal administratif**. Un préfixe **inconnu** reste prudent (administratif, forum nul) et **n'est jamais une erreur** : aucun nom de tribunal n'est deviné.
+
+Le code est un **port** de `parse_court_file_number` de Pallas Athéna, éprouvé par un **différentiel de 127 entrées** rejouées des deux côtés (`test/fixtures/dossier-athena.json`). Une divergence se répare dans le code, jamais dans la fixture.
+
+### 17.3 `palais_list` · 17.4 `palais_get`
+
+Répertoire des **43 palais de justice et 8 points de service** du MJQ, avec adresse municipale, greffes qui y siègent, district judiciaire et, pour les cours itinérantes, les localités desservies. `palais_get` accepte **exactement l'une** de deux formes (numéro de greffe OU nom), contrôlée dans le gestionnaire — le validateur de §8 ne sait pas exprimer `oneOf`.
+
+### 17.5 Conséquences imposées au code (le contrat de vérité, transposé)
+
+1. **La réserve de péremption, DATÉE, dans le corps de chaque réponse `palais_*`.** Le relevé est du **2026-07-15**. Sans sa date, le lecteur ne peut pas juger du risque qu'il prend ; les palais déménagent, et l'outil doit renvoyer à la liste officielle **avant toute signification ou tout dépôt**.
+2. **Une adresse INCONNUE n'est jamais rendue comme INEXISTANTE.** Six greffes (525, 614, 635, 640, 652, 715) n'ont aucune adresse résolvable, dont quatre cours itinérantes. C'est le pendant exact de la règle INTROUVABLE de §2 : on énumère les explications concurrentes.
+3. **Aucune coordonnée n'est portée**, et l'outil le DIT plutôt que de le laisser découvrir. Ni Athéna ni aucune donnée ouverte n'en fournit, et `justice.gouv.qc.ca` refuse toute requête automatisée. Le champ `contacts` existe, vide, **en tableau** : un palais publie plusieurs numéros, un par chambre — Montréal en publie au moins quatre.
+4. **Trois pièges se conservent, ne se corrigent pas.** `point_de_service` désigne les greffes de cour **itinérante** côté greffe et les points de service du **MJQ** côté palais : ils divergent par construction. Le **nom d'un palais n'est pas sa ville** (Chicoutimi est à Saguenay ; Havre-Aubert aux Îles-de-la-Madeleine) — d'où une jointure par `palais_key`, jamais par le nom. **Kuujjuaq** est un palais publié qu'aucun greffe ne nomme : il reste non rattaché plutôt que deviné.
+
+Ces conséquences sont verrouillées par `test/garde.test.ts`, au même titre que celles de §2, et les sorties du Québec entrent dans le balayage des **formulations interdites** — par leurs chemins d'ABSENCE, qui sont précisément ceux où la tentation existe.
+
+### 17.6 Où vivent les données, et pourquoi pas en D1
+
+**Constantes TypeScript** (`src/qc/`), et non une migration. La règle qui sépare les deux précédents du dépôt : `court_codes` vit en D1 parce que la boucle de §6.4 le **réécrit** ; ces tables-ci ne sont jamais réécrites, rien à l'exécution ne les contredit. Le gain décisif est que les trois outils restent **purs** — aucune lecture D1, donc aucun mode de panne, aucun quota, aucune dépendance au réseau. La transcription est **générée** depuis la source d'Athéna, non recopiée : 130 lignes recopiées à la main, c'est une adresse fausse qui ne se signale par aucune erreur.
+
+### 17.7 Ce qui reste à faire
+
+Les **coordonnées** (téléphone par chambre, courriels de service) s'ajouteront depuis la page officielle « Numéros des greffes des palais de justice et des points de service de justice », enregistrée à la main puisqu'elle est inaccessible automatiquement. Elle servira **deux fois** : remplir `contacts`, et **réconcilier les 56 numéros de greffe** contre la source officielle — une vérification du même ordre que §4.3, à consigner avec sa date.
 
 ---
 

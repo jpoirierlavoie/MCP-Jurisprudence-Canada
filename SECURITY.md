@@ -1,6 +1,6 @@
 # Security Policy
 
-This repository holds the « Jurisprudence canadienne (CanLII) » MCP connector, a
+This repository holds the « Jurisprudence canadienne et greffes du Québec » MCP connector, a
 read-only Cloudflare Worker used by a practising Quebec lawyer to verify case-law
 citations. It handles no client data (see *Data handled* below), but it does hold a
 personal CanLII API key and a shared authentication secret — both as Cloudflare
@@ -43,6 +43,16 @@ Out of scope:
 
 This connector is deliberately narrow. What leaves the infrastructure is **citations,
 court identifiers and dates** — no client names, no case facts, no documents.
+
+Three of the thirteen tools (`greffe_parse_court_file_number`, `palais_list`,
+`palais_get`) make **no outbound request at all**, and **write nothing**. They read
+in-memory tables of Quebec courthouses and registry codes compiled into the Worker.
+
+A court file number submitted to them therefore never leaves the infrastructure, and
+is not written to `search_log` either. That second part is deliberate, not an
+oversight: a court file number identifies a **live matter** far more directly than a
+case citation does, so the tuning value of logging it does not justify keeping it.
+The tools are stateless by design, and a guard test enforces it.
 
 One reservation, stated plainly because it is better known than discovered:
 `canlii_find_case` accepts **party names**. If a name searched is that of a party to a

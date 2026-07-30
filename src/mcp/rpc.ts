@@ -131,12 +131,33 @@ export interface ToolResult {
  *   alors sans la phrase qui le borne, et `test/garde.test.ts` resterait VERT
  *   puisque le texte contiendrait toujours l'avertissement que plus personne ne lit.
  *
- *   L'argument contraire, les conditions qui justifieraient de rouvrir la question,
- *   et la forme qu'il faudrait alors adopter (un paramètre `format: "json"` dont la
- *   charge utile porte l'avertissement en champ OBLIGATOIRE, de sorte que la réserve
- *   voyage à l'intérieur des données) sont consignés en entier dans
- *   `docs/decisions/001-sortie-texte-et-outputSchema.md`. Le lire avant d'ajouter
- *   `structuredContent` ici.
+ *   L'ARGUMENT CONTRAIRE, qui n'est pas faible : un modèle qui lit
+ *   `verdict: "DISCORDANTE"` dans un champ ne peut pas se tromper, là où il peut mal
+ *   analyser une prose — surtout sur un lot de vingt-cinq citations aux verdicts
+ *   alternés ; un consommateur PAR PROGRAMME voudrait des champs typés plutôt qu'une
+ *   expression régulière sur du français ; et c'est la direction du protocole. Ces
+ *   trois points sont justes. Ils perdent quand même, parce que le gain de fiabilité
+ *   est marginal alors que la perte — une assurance rendue sans sa réserve — est
+ *   catastrophique et SILENCIEUSE. Le destinataire réel est d'ailleurs un modèle, qui
+ *   lit très bien le français.
+ *
+ *   CE QU'IL FAUDRAIT FAIRE le jour où un consommateur par programme existe vraiment
+ *   (pas hypothétiquement) : non pas `structuredContent`, mais un paramètre explicite
+ *   `format: { enum: ["texte", "json"] }` dont la charge utile JSON porte la mise en
+ *   garde en champ OBLIGATOIRE (`required`) :
+ *
+ *       { "verdict": "CONFIRMÉE",
+ *         "avertissement": "Établit l'existence et l'identité, jamais l'autorité…" }
+ *
+ *   La différence est décisive : la réserve voyage À L'INTÉRIEUR des données. On ne
+ *   peut plus la laisser tomber sans supprimer une clef — un geste délibéré et
+ *   visible — au lieu de dépendre de la bonne volonté d'un client.
+ *
+ *   Quatre conditions, toutes requises, avant d'ouvrir ce chantier : (1) un
+ *   consommateur identifié, qui existe et le demande ; (2) `avertissement` dans le
+ *   `required` du schéma, non optionnel ; (3) un test de garde équivalent à celui de
+ *   la prose, portant sur la charge utile JSON ; (4) le texte reste le format PAR
+ *   DÉFAUT — `json` s'obtient en le demandant.
  */
 export function ok(text: string): ToolResult {
   return { content: [{ type: "text", text }], isError: false };

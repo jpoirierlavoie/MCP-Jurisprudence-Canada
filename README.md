@@ -1,10 +1,11 @@
-# Jurisprudence canadienne (CanLII) — connecteur MCP
+# Jurisprudence canadienne et greffes du Québec — connecteur MCP
 
 Serveur MCP autonome sur Cloudflare Workers, exposant la **REST API de CanLII** sous forme
-d'outils orientés **vérification de références** plutôt que d'enveloppes d'endpoints.
+d'outils orientés **vérification de références** plutôt que d'enveloppes d'endpoints, plus
+trois outils **hors ligne** sur les greffes et palais de justice du Québec.
 
 - **Point d'entrée** : `https://jurisprudence.poirierlavoie.ca/mcp/<secret>`
-- **Worker** `jurisprudence` · **base D1** `canlii` · **préfixe d'outils** `canlii_`
+- **Worker** `jurisprudence` · **base D1** `canlii`
 - Propriétaire : Jason Poirier Lavoie (avocat, Québec)
 
 L'API de CanLII est en **lecture seule** et ne renvoie que des **métadonnées** — jamais le
@@ -16,6 +17,22 @@ texte d'une décision. La valeur du connecteur tient donc à trois usages :
    constructible (recueils, identifiants SOQUIJ) ;
 3. **Identifier** précisément une décision, puis en obtenir l'hyperlien `canlii.ca` afin
    d'en tirer le texte par un autre moyen.
+
+À quoi s'ajoute, depuis le 2026-07-30, la lecture d'un **numéro de dossier de cour du
+Québec** et le **répertoire des palais de justice** — la pratique quotidienne autour des
+mêmes décisions.
+
+### ⚠ Deux sources, deux préfixes
+
+La distinction est **sémantique**, pas cosmétique, et elle est **vérifiée par les tests** :
+
+| Préfixe | Source | Appels |
+|---|---|---|
+| `canlii_` (10) | la collection de **CanLII** — couverture et verdicts en dépendent | oui |
+| `greffe_` `palais_` (3) | un **relevé local** du ministère de la Justice du Québec, daté | **aucun** |
+
+Servir une adresse de palais sous `canlii_` attribuerait à CanLII une donnée dont il n'est
+pas la source. C'est précisément ce que la décision D8 interdit.
 
 ---
 
@@ -67,7 +84,9 @@ n'est pas de l'ajuster pour qu'il passe : c'est de remettre la mise en garde.
 
 ---
 
-## Les dix outils
+## Les treize outils
+
+### Adossés à CanLII
 
 | Outil | Rôle |
 |---|---|
@@ -82,7 +101,22 @@ n'est pas de l'ajuster pour qu'il passe : c'est de remettre la mise en garde.
 | `canlii_get_legislation` | Fiche d'une loi : dates, abrogation, découpage |
 | `canlii_parse_citation` | Analyse hors ligne d'une citation — **aucun appel** |
 
+### Tables locales du Québec — **aucun appel, jamais**
+
+| Outil | Rôle |
+|---|---|
+| `greffe_parse_court_file_number` | `500-05-123456-241` → greffe, district judiciaire, tribunal, compétence. Un préfixe `TAL-`, `C.F.-`… désigne le tribunal qui numérote lui-même |
+| `palais_list` | Répertoire des 43 palais et 8 points de service, filtrable par district, type ou texte libre |
+| `palais_get` | Fiche d'un lieu : adresse, greffes qui y siègent, localités desservies d'une cour itinérante |
+
 Sorties en **texte français**, jamais en JSON (décision D4).
+
+**Ce que les trois outils du Québec n'établissent PAS** : qu'un dossier existe ou soit actif.
+Ils lisent une **nomenclature** et un **relevé d'adresses**, pas un registre — le connecteur
+n'a accès à aucun plumitif. Les adresses datent du **2026-07-15** et **aucune coordonnée
+téléphonique** n'est portée : les palais déménagent, et il faut vérifier auprès du Ministère
+avant toute signification ou tout dépôt. Ces réserves vivent **dans le corps des réponses**
+et sont verrouillées par `test/garde.test.ts`, comme celles de CanLII.
 
 ---
 
@@ -110,16 +144,20 @@ claude.ai / Claude Code
         ▼
   Worker `jurisprudence` (workerd, TypeScript, ZÉRO dépendance d'exécution)
     routeur → authentification → JSON-RPC → registre d'outils
-        │                            │
-   analyseur de citations      client CanLII
-   (pur, hors ligne)           (séquentiel, étranglé, réessayé)
-        └────────────┬───────────────┘
-                     ▼
-                D1 `canlii`  — index ET cache
-                     │ HTTPS
-                     ▼
-            https://api.canlii.org/v1/…
+        │                  │                        │
+   analyseur de       tables du Québec        client CanLII
+   citations          `src/qc/` — greffes,    (séquentiel, étranglé,
+   (pur, hors ligne)  palais, juridictions     réessayé)
+        │             (PUR, aucune E/S)             │
+        └────────────┬────────────────────────────┬─┘
+                     ▼                            ▼
+                D1 `canlii`                 https://api.canlii.org/v1/…
+                index ET cache
 ```
+
+Les tables `src/qc/` sont des **constantes TypeScript**, non une base : rien ne les réécrit
+à l'exécution, et les trois outils qui s'en servent ne peuvent donc ni échouer, ni consommer
+de quota, ni dépendre du réseau. Leur fraîcheur est celle du dépôt — d'où la réserve datée.
 
 **Transport** : Streamable HTTP, **mode JSON sans état** — un message JSON-RPC par `POST`,
 pas de SSE, pas de `Mcp-Session-Id`.
@@ -183,7 +221,7 @@ concurrentes) · `[1985] C.A. 105` NON CONSTRUCTIBLE (avec renvoi à `canlii_fin
 
 - Ajouter le connecteur dans `claude.ai` : URL
   `https://jurisprudence.poirierlavoie.ca/mcp/<secret>`, nom
-  « Jurisprudence canadienne (CanLII) ».
+  « Jurisprudence canadienne et greffes du Québec ».
 - ~~Créer une règle de limitation de débit au tableau de bord~~ — **fait, mais autrement**
   (2026-07-23). La limitation de débit de §9.3 est implémentée **dans le Worker**
   (binding `ratelimits`, 60 requêtes/minute par IP), et non par une règle WAF de zone :

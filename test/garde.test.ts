@@ -14,12 +14,16 @@
  * ║ passe : c'est de remettre la mise en garde.                                   ║
  * ╚══════════════════════════════════════════════════════════════════════════════╝
  */
+import { env } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import {
   EXPLICATIONS_INTROUVABLE,
   GARDE_CITATEUR,
+  GARDE_DOSSIER,
+  GARDE_PALAIS,
   GARDE_RECHERCHE,
+  GARDE_SANS_ADRESSE,
   GARDE_SORTS_PIED,
   GARDE_SORTS_TETE,
   GARDE_VERIFICATION,
@@ -58,9 +62,9 @@ const FORMULATIONS_INTERDITES = [
   /\bcitation valide\b/i,
 ];
 
-describe("§2 — les dix outils existent et se décrivent", () => {
-  it("expose exactement dix outils", () => {
-    expect(Object.keys(TOOLS)).toHaveLength(10);
+describe("§2 — les treize outils existent et se décrivent", () => {
+  it("expose exactement treize outils : dix CanLII, trois du Québec", () => {
+    expect(Object.keys(TOOLS)).toHaveLength(13);
   });
 
   it("chacun porte une description non vide et un schéma fermé", () => {
@@ -77,17 +81,18 @@ describe("§2 — les dix outils existent et se décrivent", () => {
       expect(titre.length, String(d.name)).toBeGreaterThan(3);
       expect(titre, String(d.name)).not.toBe(d.name);
       // Le titre est du français lisible, pas un identifiant recyclé.
-      expect(titre, String(d.name)).not.toMatch(/^canlii_/);
+      expect(titre, String(d.name)).not.toMatch(/^(canlii|greffe|palais)_/);
     }
   });
 
-  it("le titre des outils HEURISTIQUES porte leur réserve", () => {
+  it("le titre des outils HEURISTIQUES ou HORS LIGNE porte leur réserve", () => {
     // Le titre s'affiche dans l'invite d'autorisation : c'est le dernier endroit
     // où la réserve peut être lue AVANT que l'outil ne s'exécute.
     const t = Object.fromEntries(listToolDescriptors().map((d) => [d.name, d.title as string]));
     expect(t.canlii_subsequent_history).toMatch(/heuristique/i);
     expect(t.canlii_citator).toMatch(/brute/i);
     expect(t.canlii_parse_citation).toMatch(/hors ligne/i);
+    expect(t.greffe_parse_court_file_number).toMatch(/hors ligne/i);
   });
 
   it("tous sont annotés en lecture seule et monde ouvert (§7)", () => {
@@ -216,11 +221,134 @@ describe("§2 conséquence n° 2 — un INTROUVABLE n'est jamais une négation d
         await callTool("canlii_parse_citation", { citation: "2020 QCCA 495" }, toolCtx(client)),
       ),
       texte(await callTool("canlii_get_case", { citation: "2008 CSC 9" }, toolCtx(client))),
+      // §17 — les sorties du Québec obéissent à la MÊME interdiction, y compris sur
+      // leurs chemins d'absence, qui sont précisément ceux où la tentation existe.
+      texte(await callTool("palais_get", { greffe_number: "999" }, toolCtx(client))),
+      texte(await callTool("palais_get", { greffe_number: "614" }, toolCtx(client))),
+      texte(await callTool("palais_get", { palais: "Trifouillis" }, toolCtx(client))),
+      texte(await callTool("palais_list", { district: "Vaudreuil" }, toolCtx(client))),
+      texte(
+        await callTool(
+          "greffe_parse_court_file_number",
+          { court_file_number: "999-99-1" },
+          toolCtx(client),
+        ),
+      ),
     ];
     for (const s of sorties) {
       for (const interdite of FORMULATIONS_INTERDITES) {
         expect(s, `formulation interdite ${interdite}`).not.toMatch(interdite);
       }
+    }
+  });
+});
+
+/**
+ * §17 — les tables du Québec ne viennent PAS de CanLII, et leur mode de panne n'est
+ * pas l'absence mais la PÉREMPTION : une adresse juste hier, fausse aujourd'hui,
+ * rendue avec le même aplomb dans les deux cas. La réserve datée est donc la seule
+ * chose qui distingue un répertoire utile d'un répertoire dangereux.
+ */
+describe("§17 — les réserves des outils du Québec ne disparaissent pas", () => {
+  it("TOUTE sortie palais_* porte la réserve de péremption ET sa date", async () => {
+    const c = () => toolCtx(fakeClient({}));
+    const sorties = [
+      texte(await callTool("palais_list", {}, c())),
+      texte(await callTool("palais_list", { district: "Montréal" }, c())),
+      texte(await callTool("palais_list", { district: "Vaudreuil" }, c())), // vide
+      texte(await callTool("palais_get", { greffe_number: "500" }, c())),
+      texte(await callTool("palais_get", { greffe_number: "614" }, c())), // sans adresse
+      texte(await callTool("palais_get", { greffe_number: "999" }, c())), // inconnu
+      texte(await callTool("palais_get", { palais: "Montréal" }, c())),
+      texte(await callTool("palais_get", { palais: "Trifouillis" }, c())), // introuvable
+    ];
+    for (const s of sorties) {
+      expect(contient(s, GARDE_PALAIS), "réserve de péremption absente").toBe(true);
+      expect(s).toContain("2026-07-15");
+    }
+  });
+
+  it("toute sortie du parseur porte sa réserve de nomenclature", async () => {
+    const c = () => toolCtx(fakeClient({}));
+    for (const n of ["500-05-123456-241", "TAL-594531", "XYZ-1", "500", "999-99-1", "614-05-1"]) {
+      const s = texte(
+        await callTool("greffe_parse_court_file_number", { court_file_number: n }, c()),
+      );
+      expect(contient(s, GARDE_DOSSIER), `réserve absente pour « ${n} »`).toBe(true);
+    }
+  });
+
+  it("une adresse INCONNUE n'est jamais rendue comme une adresse INEXISTANTE", async () => {
+    // Le pendant exact de la règle INTROUVABLE : six greffes sont concernés, dont
+    // quatre cours itinérantes. Formuler l'inconnu comme une absence ferait renoncer
+    // un praticien à une démarche possible.
+    for (const numero of ["525", "614", "635", "640", "652", "715"]) {
+      const s = texte(
+        await callTool("palais_get", { greffe_number: numero }, toolCtx(fakeClient({}))),
+      );
+      expect(s, numero).toContain("Aucune adresse publiée");
+      expect(contient(s, GARDE_SANS_ADRESSE), numero).toBe(true);
+    }
+  });
+
+  it("l'absence de coordonnées est ANNONCÉE, non laissée à découvrir", async () => {
+    const s = texte(
+      await callTool("palais_get", { greffe_number: "500" }, toolCtx(fakeClient({}))),
+    );
+    expect(s).toContain("AUCUNE");
+    expect(s).toContain("téléphone");
+  });
+
+  it("aucun nom de tribunal n'est DEVINÉ pour un préfixe inconnu", async () => {
+    const s = texte(
+      await callTool(
+        "greffe_parse_court_file_number",
+        { court_file_number: "ZZZZ-1" },
+        toolCtx(fakeClient({})),
+      ),
+    );
+    expect(s).toContain("NON répertorié");
+    // Aucun des vingt forums connus ne doit apparaître dans une réponse « inconnu ».
+    expect(s).not.toMatch(/Tribunal administratif|Cour fédérale|Cour suprême/);
+  });
+
+  it("les outils du Québec n'écrivent RIEN — pas même dans search_log (§9.5)", async () => {
+    // Un numéro de dossier désigne un dossier EN COURS bien plus directement qu'une
+    // citation. Les outils canlii_* consignent leur requête pour affiner l'analyseur ;
+    // ceux-ci ne le font pas, et ce n'est pas un oubli. Sans ce test, un ajout de
+    // télémétrie « par cohérence » se ferait sans que personne ne voie le glissement.
+    const avant = await env.DB.prepare("SELECT COUNT(*) AS n FROM search_log").first<{
+      n: number;
+    }>();
+
+    const c = () => toolCtx(fakeClient({}));
+    await callTool(
+      "greffe_parse_court_file_number",
+      { court_file_number: "500-17-987654-321" },
+      c(),
+    );
+    await callTool("palais_list", { district: "Montréal" }, c());
+    await callTool("palais_get", { greffe_number: "500" }, c());
+
+    const apres = await env.DB.prepare("SELECT COUNT(*) AS n FROM search_log").first<{
+      n: number;
+    }>();
+    expect(apres?.n).toBe(avant?.n);
+  });
+
+  it("les outils du Québec ne prétendent JAMAIS venir de CanLII", async () => {
+    const c = () => toolCtx(fakeClient({}));
+    const sorties = [
+      texte(await callTool("palais_list", {}, c())),
+      texte(await callTool("palais_get", { greffe_number: "500" }, c())),
+      texte(
+        await callTool("greffe_parse_court_file_number", { court_file_number: "500-05-1" }, c()),
+      ),
+    ];
+    for (const s of sorties) {
+      expect(s).not.toMatch(/canlii\.ca|api\.canlii\.org/i);
+      // Le renvoi À l'outil canlii_* reste permis ; l'attribution ne l'est pas.
+      expect(s).not.toMatch(/selon CanLII|d'après CanLII|source : CanLII/i);
     }
   });
 });
