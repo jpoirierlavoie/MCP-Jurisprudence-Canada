@@ -64,8 +64,14 @@ node scripts/refresh-databases.mjs --remote --sql   # réconciliation §4.3
    garde qui échoue se **répare en remettant la garantie**, jamais en ajustant le test.
    Corollaire : **pas de `structuredContent`, pas d'`outputSchema`** — un client qui reçoit
    un objet typé laisse tomber la prose, et la réserve part avec elle SANS qu'aucun test
-   n'échoue. Argument complet, conditions de réouverture et forme à adopter le cas échéant :
-   `docs/decisions/001-sortie-texte-et-outputSchema.md`.
+   n'échoue. Réexaminé le 2026-07-23, maintenu. L'argument contraire est réel (un champ
+   `verdict` ne se lit pas de travers ; un consommateur par programme voudrait du typé)
+   mais le gain est marginal devant une perte silencieuse. **Si** un consommateur par
+   programme existe un jour, la réponse n'est PAS `structuredContent` : c'est un paramètre
+   `format: {enum:["texte","json"]}` dont la charge utile porte `avertissement` en champ
+   **obligatoire**, de sorte que la réserve voyage à l'intérieur des données. Quatre
+   conditions cumulatives, et le texte reste le défaut. Argument complet en commentaire
+   au-dessus de `ok()` dans `src/mcp/rpc.ts` — le lire avant d'y toucher.
 5. **Ne jamais journaliser `request.url`** : le secret partagé est dans le chemin (§9.2).
    Aucune sortie d'outil ne contient d'URL `api.canlii.org` — elles portent la clef d'API.
 6. **La boucle d'auto-correction (§6.4) vit dans `src/store/lookup.ts`, en un seul
