@@ -1,5 +1,5 @@
 /**
- * Worker « Jurisprudence canadienne (CanLII) » — routage, authentification,
+ * Worker « Jurisprudence canadienne et greffes du Québec » — routage, authentification,
  * coupe-circuit, et gestionnaire planifié (spécification §8, §9, §11).
  *
  * ╔══════════════════════════════════════════════════════════════════════════════╗

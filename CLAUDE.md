@@ -1,9 +1,10 @@
-# CLAUDE.md — Jurisprudence canadienne (CanLII)
+# CLAUDE.md — Jurisprudence canadienne et greffes du Québec
 
-Connecteur MCP exposant la REST API de CanLII :
-`https://jurisprudence.poirierlavoie.ca/mcp/<secret>`. Propriétaire : Jason Poirier Lavoie
-(avocat, Québec). **C'est un outil juridique : un résultat faux rendu en silence est le pire
-défaut possible — refuser vaut toujours mieux que deviner.**
+Connecteur MCP exposant la REST API de CanLII, **plus trois outils hors ligne sur les
+greffes et palais du Québec** : `https://jurisprudence.poirierlavoie.ca/mcp/<secret>`.
+Propriétaire : Jason Poirier Lavoie (avocat, Québec). **C'est un outil juridique : un
+résultat faux rendu en silence est le pire défaut possible — refuser vaut toujours mieux
+que deviner.**
 
 La spécification qui fait foi est [`SPEC_CANLII_MCP.md`](SPEC_CANLII_MCP.md), versionnée à la
 racine. Ses §1 (décisions arrêtées) et §2 (contrat de vérité) se lisent **avant** toute
@@ -17,21 +18,27 @@ transport Streamable HTTP en **mode JSON sans état** (D3). Config : `wrangler.j
 ```
 src/index.ts      routage, authentification à temps constant, coupe-circuit, cron
 src/mcp/          rpc.ts (JSON-RPC) · validate.ts (JSON-Schema en sous-ensemble)
-                  registry.ts (les 10 descripteurs) · handlers/ (un par outil)
+                  registry.ts (les 13 descripteurs) · handlers/ (un par outil)
 src/citation/     analyseur PUR — parse, normalize, compare. AUCUNE E/S.
 src/canlii/       client sortant : étranglement, réessais, redactUrl
 src/store/        D1 : cases (+FTS) · databases (auto-correction) · citator · telemetry
                   lookup.ts — la boucle d'auto-correction, en UN SEUL exemplaire
+src/qc/           §17 — tables du Québec, PURES : palais · greffes · juridictions ·
+                  forums · dossier.ts (parseur) · lookup.ts. Constantes, PAS de D1.
 src/format/       fr.ts (dates, listes) · render.ts (gabarits annexe A + mises en garde)
 src/backfill.ts   §11 — écrit, testé, INERTE
 ```
+
+⚠ Deux `lookup.ts` coexistent et ne se ressemblent pas : `src/store/lookup.ts` est la
+boucle d'auto-correction (§6.4, avec E/S) ; `src/qc/lookup.ts` est une consultation de
+table en mémoire (aucune E/S). Ne pas fusionner.
 
 ## Commandes
 
 ```bash
 npx wrangler types && npx tsc --noEmit     # toujours avant commit
 npx biome check .                          # --write pour corriger
-npx vitest run                             # 210 tests, sans réseau ni clef
+npx vitest run                             # 407 tests, sans réseau ni clef
 npx wrangler dev                           # exige .dev.vars
 npx wrangler deploy --dry-run              # valide paquet + config, sans jeton
 npx wrangler d1 migrations apply canlii --local|--remote
@@ -104,6 +111,25 @@ node scripts/refresh-databases.mjs --remote --sql   # réconciliation §4.3
     quotidien déclaré. Ce n'est plus une question ouverte mais une décision du
     praticien : ne pas basculer le drapeau, même « pour essayer ». Le remplissage du
     cache par l'usage (D6) n'est pas concerné — c'est autre chose.
+16. **Le PRÉFIXE d'un outil annonce sa SOURCE, et c'est vérifié (§17).** `canlii_*` (10)
+    signifie « la réponse vient de la collection de CanLII » ; `greffe_*` et `palais_*` (3)
+    lisent un relevé LOCAL du ministère de la Justice du Québec, sans aucun appel. Servir
+    une adresse de palais sous `canlii_` attribuerait à CanLII une donnée dont il n'est pas
+    la source — l'inverse exact de ce que D8 protège. `test/rpc.test.ts` épingle la
+    scission ; ajouter un outil oblige à choisir sa famille délibérément.
+17. **Les tables de `src/qc/` sont un RELEVÉ DATÉ, pas une vérité.** Leur mode de panne
+    n'est pas l'absence mais la **péremption** : une adresse juste hier, fausse aujourd'hui,
+    rendue avec le même aplomb. D'où `GARDE_PALAIS`, qui porte la date **dans le corps** de
+    chaque réponse. Et trois pièges à ne PAS « corriger » : `point_de_service` désigne les
+    cours itinérantes côté greffe mais les points de service du MJQ côté palais (ils
+    divergent par construction) ; le nom d'un palais n'est pas sa ville (Chicoutimi est à
+    Saguenay) ; une `palais_key` nulle signifie adresse **inconnue**, jamais inexistante —
+    le pendant exact de la règle INTROUVABLE.
+18. **Le parseur de dossiers est un PORT, éprouvé par différentiel.** `src/qc/dossier.ts`
+    reproduit `parse_court_file_number` d'Athéna, et `test/fixtures/dossier-athena.json`
+    rejoue 127 entrées des deux côtés. Il n'y a **ni somme de contrôle ni règle d'année** :
+    ne pas en inventer. Un préfixe alphabétique inconnu reste prudent et n'est **jamais**
+    une erreur. Une divergence du différentiel se répare dans le code, pas dans la fixture.
 
 ## Procédure sûre
 

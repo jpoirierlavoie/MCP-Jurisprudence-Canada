@@ -95,9 +95,11 @@ const DATE: JsonSchema = {
 };
 
 export const SERVER_INFO = {
+  // `name` est un IDENTIFIANT, pas un libellé : il ne change pas avec le titre. Le
+  // renommer n'apporterait rien et romprait un point d'appui (test/rpc.test.ts).
   name: "jurisprudence-canlii",
-  title: "Jurisprudence canadienne (CanLII)",
-  version: "0.1.0",
+  title: "Jurisprudence canadienne et greffes du Québec",
+  version: "0.2.0",
 };
 
 /** Orientation rendue à l'initialisation. Elle porte, elle aussi, le contrat de §2. */
@@ -113,7 +115,19 @@ export const INSTRUCTIONS =
   "R.J.Q. / C.A., identifiants J.E. / REJB / EYB / AZ), enchaîner avec canlii_find_case. " +
   "Pour le TEXTE des lois et règlements du Québec, employer le connecteur « Législation " +
   "du Québec ». Les verdicts et la couverture dépendent de la collection de CanLII : " +
-  "une absence n'est jamais une preuve d'inexistence.";
+  "une absence n'est jamais une preuve d'inexistence. " +
+  // §17 — la frontière des sources, énoncée au modèle AVANT tout appel : sans elle,
+  // il attribuerait à CanLII une adresse de palais, ou chercherait dans CanLII un
+  // numéro de greffe. Les deux erreurs sont silencieuses.
+  "DEUX SOURCES DISTINCTES coexistent ici. Les outils canlii_* interrogent CanLII. Les " +
+  "outils greffe_* et palais_* lisent des TABLES LOCALES relevées auprès du ministère de " +
+  "la Justice du Québec le 2026-07-15 : ils ne font aucun appel, ne consultent aucun " +
+  "registre de dossiers ni plumitif, et n'établissent donc PAS qu'un dossier existe. " +
+  "greffe_parse_court_file_number lit un numéro de dossier québécois (500-05-123456-241) " +
+  "et en tire le greffe, le district judiciaire, le tribunal et la compétence ; palais_list " +
+  "et palais_get donnent les palais de justice et leur adresse. Ces adresses vieillissent " +
+  "et ne portent aucune coordonnée téléphonique : les vérifier auprès du Ministère avant " +
+  "toute signification ou tout dépôt.";
 
 export const TOOLS: Record<string, ToolDescriptor> = {
   // ── 7.1 — l'outil pivot ────────────────────────────────────────────────────

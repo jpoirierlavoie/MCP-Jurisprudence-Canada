@@ -14,6 +14,7 @@
  * ║ passe : c'est de remettre la mise en garde.                                   ║
  * ╚══════════════════════════════════════════════════════════════════════════════╝
  */
+import { env } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import {
@@ -309,6 +310,30 @@ describe("§17 — les réserves des outils du Québec ne disparaissent pas", ()
     expect(s).toContain("NON répertorié");
     // Aucun des vingt forums connus ne doit apparaître dans une réponse « inconnu ».
     expect(s).not.toMatch(/Tribunal administratif|Cour fédérale|Cour suprême/);
+  });
+
+  it("les outils du Québec n'écrivent RIEN — pas même dans search_log (§9.5)", async () => {
+    // Un numéro de dossier désigne un dossier EN COURS bien plus directement qu'une
+    // citation. Les outils canlii_* consignent leur requête pour affiner l'analyseur ;
+    // ceux-ci ne le font pas, et ce n'est pas un oubli. Sans ce test, un ajout de
+    // télémétrie « par cohérence » se ferait sans que personne ne voie le glissement.
+    const avant = await env.DB.prepare("SELECT COUNT(*) AS n FROM search_log").first<{
+      n: number;
+    }>();
+
+    const c = () => toolCtx(fakeClient({}));
+    await callTool(
+      "greffe_parse_court_file_number",
+      { court_file_number: "500-17-987654-321" },
+      c(),
+    );
+    await callTool("palais_list", { district: "Montréal" }, c());
+    await callTool("palais_get", { greffe_number: "500" }, c());
+
+    const apres = await env.DB.prepare("SELECT COUNT(*) AS n FROM search_log").first<{
+      n: number;
+    }>();
+    expect(apres?.n).toBe(avant?.n);
   });
 
   it("les outils du Québec ne prétendent JAMAIS venir de CanLII", async () => {

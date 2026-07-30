@@ -6,6 +6,12 @@
  * ⚠ PRÉFIXE `greffe_` ET NON `canlii_` : la réponse ne vient PAS de CanLII mais d'un
  *   relevé local du ministère de la Justice du Québec. Dire « canlii » ici ferait
  *   attribuer à CanLII une donnée dont il n'est pas la source (D8).
+ *
+ * ⚠ AUCUNE TÉLÉMÉTRIE, DÉLIBÉRÉMENT. Les outils `canlii_*` consignent leur requête dans
+ *   `search_log` pour affiner l'analyseur ; celui-ci ne le fait pas. Un numéro de
+ *   dossier désigne un DOSSIER EN COURS bien plus directement qu'une citation de
+ *   jurisprudence — c'est la réserve de §9.5 appliquée à la lettre. Le gain de réglage
+ *   ne vaut pas la conservation. Verrouillé par `test/garde.test.ts`.
  */
 
 import { joindre } from "../../format/fr";
