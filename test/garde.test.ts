@@ -279,10 +279,13 @@ describe("§17 — les réserves des outils du Québec ne disparaissent pas", ()
   });
 
   it("une adresse INCONNUE n'est jamais rendue comme une adresse INEXISTANTE", async () => {
-    // Le pendant exact de la règle INTROUVABLE : six greffes sont concernés, dont
-    // quatre cours itinérantes. Formuler l'inconnu comme une absence ferait renoncer
-    // un praticien à une démarche possible.
-    for (const numero of ["525", "614", "635", "640", "652", "715"]) {
+    // Le pendant exact de la règle INTROUVABLE. Formuler l'inconnu comme une absence
+    // ferait renoncer un praticien à une démarche possible.
+    //
+    // 635 ne figure PLUS ici : la réconciliation du 2026-07-30 lui a trouvé une
+    // adresse (Kuujjuaq, son siège fixe selon le MJQ). C'est la bonne façon de sortir
+    // de cette liste — par une source, jamais en assouplissant la formulation.
+    for (const numero of ["525", "614", "625", "640", "652", "715"]) {
       const s = texte(
         await callTool("palais_get", { greffe_number: numero }, toolCtx(fakeClient({}))),
       );

@@ -11,11 +11,13 @@
 import { joindre, pluriel } from "../../format/fr";
 import { GARDE_PALAIS, GARDE_SANS_ADRESSE } from "../../format/render";
 import {
+  adresseDuGreffe,
   getGreffe,
   greffesDuPalais,
   listerPalais,
   localitesItinerantes,
   resoudrePalais,
+  siegeFixe,
 } from "../../qc/lookup";
 import { PAYS, PROVINCE } from "../../qc/palais";
 import type { ToolContext } from "../registry";
@@ -68,9 +70,21 @@ export async function palaisGetTool(
       }
     }
 
-    if (greffe.palais_key) {
-      const resolu = resoudrePalais(greffe.palais_key);
-      if (resolu) lignes.push("", ...blocAdresse(resolu.palais));
+    // Une seule voie de résolution, celle de `adresseDuGreffe` : elle essaie
+    // `palais_key` PUIS le siège fixe nommé par le MJQ. Interroger `palais_key` ici
+    // ferait diverger cet outil de greffe_parse_court_file_number, qui annoncerait
+    // une adresse là où celui-ci dirait « aucune » — pour le même greffe.
+    const adresse = adresseDuGreffe(greffeNumber);
+    if (adresse) {
+      const siege = greffe.palais_key ? null : siegeFixe(greffeNumber);
+      if (siege) {
+        lignes.push(
+          "",
+          `Siège fixe : ${siege.palais.name} — rattaché à ce greffe par le relevé du`,
+          "ministère de la Justice, et non par déduction.",
+        );
+      }
+      lignes.push("", ...blocAdresse(adresse));
     } else {
       // ⚠ INCONNU n'est pas INEXISTANT (§2).
       lignes.push("", `Aucune adresse publiée n'est rattachée au greffe ${greffeNumber}.`);

@@ -11,8 +11,9 @@
 
 import { fold } from "../citation/normalize";
 import { FORUMS, type Forum } from "./forums";
-import { GREFFES, type Greffe, LOCALITES_ITINERANTES } from "./greffes";
+import { GREFFES, type Greffe } from "./greffes";
 import { JURIDICTIONS, type Juridiction } from "./juridictions";
+import { LIEUX_PAR_GREFFE, type LieuMjq } from "./lieux";
 import { PALAIS, type Palais, type TypeLieu } from "./palais";
 
 export function getGreffe(numero: string): Greffe | null {
@@ -31,9 +32,47 @@ export function getForum(clef: string): Forum | null {
   return FORUMS[clef] ?? null;
 }
 
-/** Localités desservies par un greffe itinérant ; vide pour tous les autres. */
-export function localitesItinerantes(numero: string): readonly string[] {
-  return LOCALITES_ITINERANTES[numero] ?? [];
+/**
+ * Lieux desservis par un greffe, d'après le relevé OFFICIEL du MJQ (2026-07-22).
+ *
+ * Un greffe en dessert souvent plusieurs — ce que `palais_key`, 1:1, ne peut pas dire.
+ */
+export function lieuxDuGreffe(numero: string): readonly LieuMjq[] {
+  return LIEUX_PAR_GREFFE[numero] ?? [];
+}
+
+/**
+ * Localités desservies EN COUR ITINÉRANTE par un greffe ; vide pour les autres.
+ *
+ * Source : la page officielle du MJQ, et non plus la seule liste d'Athéna — laquelle
+ * ne couvrait que quatre greffes et ignorait Vaudreuil-Dorion (760) et Senneterre
+ * (625). On retire le chef-lieu du greffe, qui n'est pas une localité « desservie »
+ * mais le greffe lui-même.
+ */
+export function localitesItinerantes(numero: string): string[] {
+  const chef = GREFFES[numero]?.palais_de_justice;
+  return lieuxDuGreffe(numero)
+    .filter((l) => l.itinerant && l.nom !== chef)
+    .map((l) => l.nom);
+}
+
+/**
+ * Siège FIXE d'un greffe d'après le MJQ — le lieu non itinérant, s'il en existe un
+ * et qu'une adresse lui est connue.
+ *
+ * Sert à résoudre le cas que `palais_key` ne pouvait pas exprimer : le greffe 635
+ * (Nunavik) n'avait aucune adresse alors que le Ministère lui rattache **Kuujjuaq**,
+ * qui n'y est PAS itinérant. Athéna avait laissé Kuujjuaq orphelin faute de savoir à
+ * quel greffe le rattacher, et refusait de le deviner ; la page officielle le dit.
+ */
+export function siegeFixe(numero: string): { clef: string; palais: Palais } | null {
+  for (const lieu of lieuxDuGreffe(numero)) {
+    if (lieu.itinerant) continue;
+    for (const [clef, palais] of Object.entries(PALAIS)) {
+      if (palais.name === lieu.nom) return { clef, palais };
+    }
+  }
+  return null;
 }
 
 /**
@@ -45,8 +84,12 @@ export function localitesItinerantes(numero: string): readonly string[] {
  */
 export function adresseDuGreffe(numero: string): Palais | null {
   const g = GREFFES[numero];
-  if (!g?.palais_key) return null;
-  return PALAIS[g.palais_key] ?? null;
+  if (!g) return null;
+  if (g.palais_key) return PALAIS[g.palais_key] ?? null;
+  // Rattrapage par le relevé du MJQ : `palais_key` ne nomme qu'UN bâtiment, alors
+  // qu'un greffe en dessert plusieurs. C'est ce qui donne enfin une adresse au
+  // greffe 635, dont le siège fixe est Kuujjuaq.
+  return siegeFixe(numero)?.palais ?? null;
 }
 
 /** Numéros de greffe, triés. */
@@ -84,8 +127,14 @@ export interface PalaisResolu {
  *   « Chicoutimi ». Apparier les noms perdrait ces deux-là en silence.
  */
 export function greffesDuPalais(clef: string): Array<{ numero: string; greffe: Greffe }> {
+  const nom = PALAIS[clef]?.name;
   return Object.entries(GREFFES)
-    .filter(([, g]) => g.palais_key === clef)
+    .filter(([numero, g]) => {
+      if (g.palais_key === clef) return true;
+      // Rattachement OFFICIEL : le MJQ nomme des lieux qu'aucune `palais_key` ne
+      // désigne. C'est ainsi que Kuujjuaq cesse d'être orphelin (greffe 635).
+      return nom !== undefined && lieuxDuGreffe(numero).some((l) => l.nom === nom);
+    })
     .map(([numero, greffe]) => ({ numero, greffe }))
     .sort((a, b) => a.numero.localeCompare(b.numero));
 }
@@ -128,20 +177,17 @@ export function listerPalais(filtre: FiltrePalais = {}): PalaisResolu[] {
 }
 
 /**
- * Palais publiés qu'aucun greffe ne nomme.
+ * Palais publiés qu'aucun greffe ne dessert.
  *
- * Kuujjuaq est le seul cas connu : le MJQ le publie, mais aucun numéro de greffe ne
- * le désigne. Il reste NON rattaché plutôt que deviné sur un greffe itinérant du
- * Nunavik — inventer la correspondance serait exactement la fausse assurance que §2
- * interdit. `palais_list` le rend donc, mais sans greffe.
+ * ⚠ IL N'Y EN A PLUS AUCUN depuis la réconciliation du 2026-07-30. Kuujjuaq était le
+ *   seul cas : Athéna le laissait délibérément orphelin, refusant de le rattacher au
+ *   jugé à un greffe itinérant du Nunavik. La page officielle du MJQ tranche — il
+ *   relève du greffe **635**, et n'y est pas itinérant. Le rattachement repose donc
+ *   sur une SOURCE, non sur une conjecture, et la fonction reste : un relevé ultérieur
+ *   peut très bien réintroduire un lieu que nul greffe ne nomme.
  */
 export function palaisOrphelins(): string[] {
-  const rattaches = new Set(
-    Object.values(GREFFES)
-      .map((g) => g.palais_key)
-      .filter((k): k is string => k !== null),
-  );
   return Object.keys(PALAIS)
-    .filter((k) => !rattaches.has(k))
+    .filter((clef) => greffesDuPalais(clef).length === 0)
     .sort();
 }

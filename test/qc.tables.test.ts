@@ -10,19 +10,21 @@
 import { describe, expect, it } from "vitest";
 
 import { FORUMS, INDEX_PREFIXE_FORUM } from "../src/qc/forums";
-import { GREFFES, LOCALITES_ITINERANTES } from "../src/qc/greffes";
+import { GREFFES } from "../src/qc/greffes";
 import { JURIDICTIONS } from "../src/qc/juridictions";
 import {
   adresseDuGreffe,
   greffesDuPalais,
   listerDistricts,
   listerPalais,
+  localitesItinerantes,
   palaisOrphelins,
+  siegeFixe,
 } from "../src/qc/lookup";
 import { PALAIS } from "../src/qc/palais";
 
 /** Greffes sans adresse résolvable — ensemble ATTENDU, pas une lacune tolérée. */
-const GREFFES_SANS_ADRESSE = ["525", "614", "635", "640", "652", "715"];
+const GREFFES_SANS_ADRESSE = ["525", "614", "625", "640", "652", "715"];
 
 describe("comptes — le relevé du 2026-07-15", () => {
   it("51 lieux : 43 palais de justice et 8 points de service", () => {
@@ -34,8 +36,10 @@ describe("comptes — le relevé du 2026-07-15", () => {
     expect(parType).toEqual({ palais: 43, point_de_service: 8 });
   });
 
-  it("56 greffes, 27 juridictions, 20 forums", () => {
-    expect(Object.keys(GREFFES)).toHaveLength(56);
+  it("57 greffes, 27 juridictions, 20 forums", () => {
+    // 57 et non 56 : la reconciliation du 2026-07-30 a AJOUTE le greffe 625
+    // (Senneterre), absent de la table portee d'Athena.
+    expect(Object.keys(GREFFES)).toHaveLength(57);
     expect(Object.keys(JURIDICTIONS)).toHaveLength(27);
     expect(Object.keys(FORUMS)).toHaveLength(20);
   });
@@ -87,9 +91,15 @@ describe("adresses — complètes ou franchement absentes", () => {
     }
   });
 
-  it("Kuujjuaq est le seul palais publié qu'aucun greffe ne nomme", () => {
-    // Laissé NON rattaché plutôt que deviné sur un greffe itinérant du Nunavik.
-    expect(palaisOrphelins()).toEqual(["kuujjuaq"]);
+  it("plus AUCUN palais orphelin : Kuujjuaq est rattache par le MJQ", () => {
+    // Athena laissait Kuujjuaq volontairement orphelin, refusant de le rattacher au
+    // juge a un greffe itinerant du Nunavik. La page officielle tranche : greffe 635,
+    // et il n'y est PAS itinerant — c'est le siege fixe. Le rattachement repose donc
+    // sur une SOURCE, non sur une conjecture.
+    expect(palaisOrphelins()).toEqual([]);
+    expect(greffesDuPalais("kuujjuaq").map((g) => g.numero)).toEqual(["635"]);
+    expect(siegeFixe("635")?.clef).toBe("kuujjuaq");
+    expect(adresseDuGreffe("635")?.name).toBe("Kuujjuaq");
   });
 });
 
@@ -121,7 +131,7 @@ describe("jointure greffe -> palais", () => {
 
   it("greffesDuPalais retrouve le greffe depuis le bâtiment", () => {
     expect(greffesDuPalais("montreal").map((g) => g.numero)).toEqual(["500"]);
-    expect(greffesDuPalais("kuujjuaq")).toEqual([]);
+    expect(greffesDuPalais("kuujjuaq").map((g) => g.numero)).toEqual(["635"]);
   });
 });
 
@@ -137,7 +147,8 @@ describe("les deux pièges à NE PAS corriger", () => {
       .filter(([, g]) => g.point_de_service)
       .map(([n]) => n)
       .sort();
-    expect(itinerants).toEqual(["614", "635", "640", "652"]);
+    // 625 (Senneterre) s'ajoute depuis la reconciliation du 2026-07-30.
+    expect(itinerants).toEqual(["614", "625", "635", "640", "652"]);
 
     // Côté palais : les huit points de service du MJQ — que la table des greffes
     // marque tous `false`. Les deux divergent PAR CONSTRUCTION.
@@ -152,9 +163,15 @@ describe("les deux pièges à NE PAS corriger", () => {
     }
   });
 
-  it("les quatre greffes itinérants portent leurs localités desservies", () => {
-    expect(Object.keys(LOCALITES_ITINERANTES).sort()).toEqual(["614", "635", "640", "652"]);
-    expect(LOCALITES_ITINERANTES["614"]).toContain("Mistissini");
+  it("les localites desservies viennent du MJQ, plus completes qu'Athena", () => {
+    // Athena n'en couvrait que quatre greffes ; le releve officiel en nomme davantage.
+    expect(localitesItinerantes("614")).toContain("Mistissini");
+    expect(localitesItinerantes("652")).toContain("Fermont");
+    // Deux que la liste d'Athena ignorait entierement :
+    expect(localitesItinerantes("760")).toEqual(["Vaudreuil-Dorion"]);
+    expect(localitesItinerantes("625")).toEqual([]); // Senneterre EST le chef-lieu
+    // Un greffe ordinaire n'a aucune localite itinerante.
+    expect(localitesItinerantes("500")).toEqual([]);
   });
 });
 

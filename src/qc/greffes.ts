@@ -2,27 +2,34 @@
  * Greffes du Québec — table PURE. Clef : le numéro à 3 chiffres, qui est aussi le
  * préfixe d'un numéro de dossier de cour (« 500-05-… » ⇒ greffe 500, Montréal).
  *
- * Porté de Pallas Athéna (`athena/models/reference.py`, `_GREFFES`).
+ * Porté de Pallas Athéna (`athena/models/reference.py`, `_GREFFES`), puis RÉCONCILIÉ
+ * le 2026-07-30 contre la page officielle du MJQ (voir `lieux.ts`). Deux écarts réels
+ * en sont sortis : le greffe **625 (Senneterre)** manquait, et **Kuujjuaq** relève du
+ * greffe **635**. Aucun district ne divergeait.
  *
  * ⚠ UN GREFFE N'EST PAS UN BÂTIMENT. Un greffe est un REGISTRE ; un palais est un
- *   BÂTIMENT. La relation n'est ni bijective ni totale : quatre greffes itinérants
- *   n'ont aucun bâtiment fixe, et Kuujjuaq est un palais publié qu'aucun greffe ne
- *   nomme. D'où deux tables, et une jointure par `palais_key`.
+ *   BÂTIMENT. La relation n'est ni bijective ni totale : plusieurs greffes n'ont aucun
+ *   bâtiment fixe, et un greffe peut desservir PLUSIEURS lieux — ce que `palais_key`,
+ *   qui est 1:1, ne sait pas dire. La relation complète est dans `lieux.ts`.
  *
  * ⚠ JOINDRE PAR `palais_key`, JAMAIS PAR LE NOM. Le greffe 615 dit « Val d'Or », le
  *   palais dit « Val-d'Or » ; le greffe 150 dit « Saguenay (Chicoutimi) », le palais
  *   dit « Chicoutimi ». Ce sont deux champs différents (libellé du greffe vs nom du
- *   palais au MJQ), pas une faute à corriger.
+ *   palais au MJQ), pas une faute à corriger. Seul `lieux.ts`, qui vient du MJQ,
+ *   autorise un appariement par nom — parce que les deux côtés y sont du MJQ.
  *
  * ⚠ `palais_key: null` signifie « ADRESSE INCONNUE », jamais « il n'existe pas
- *   d'adresse ». Six greffes : les quatre itinérants (614, 635, 640, 652) et deux
- *   absents du relevé de juillet 2026 (525, 715). C'est le pendant exact de la règle
- *   INTROUVABLE de §2 — l'absence d'un renseignement n'est pas un constat d'absence.
+ *   d'adresse ». Six greffes restent sans adresse résolvable (525, 614, 625, 640, 652,
+ *   715). C'est le pendant exact de la règle INTROUVABLE de §2 — l'absence d'un
+ *   renseignement n'est pas un constat d'absence. On en sort par une SOURCE : c'est
+ *   ainsi que 635 en est sorti, et non en assouplissant la formulation.
  *
- * ⚠ `point_de_service` marque ici les GREFFES DE COUR ITINÉRANTE (614/635/640/652).
- *   Ce n'est PAS le `location_type: "point_de_service"` de palais.ts, qui marque les
- *   8 points de service du MJQ — que cette table-ci marque tous `false`. Les deux
- *   divergent PAR CONSTRUCTION : ne pas « harmoniser » l'une sur l'autre.
+ * ⚠ `point_de_service` marque ici les GREFFES DE COUR ITINÉRANTE (614, 625, 635, 640,
+ *   652). Ce n'est PAS le `location_type: "point_de_service"` de palais.ts, qui marque
+ *   les 8 points de service du MJQ — que cette table-ci marque tous `false`. Et ce
+ *   n'est pas non plus le drapeau `itinerant` de `lieux.ts`, qui qualifie un LIEU :
+ *   le greffe 760 tient un palais fixe ET un point itinérant. Les trois divergent PAR
+ *   CONSTRUCTION : ne pas « harmoniser » l'un sur l'autre.
  */
 
 export interface Greffe {
@@ -293,6 +300,16 @@ export const GREFFES: Readonly<Record<string, Greffe>> = {
     point_de_service: false,
     palais_key: "la-sarre",
   },
+  // ⚠ AJOUTÉ par la réconciliation du 2026-07-30, non porté d'Athéna : ce greffe
+  //   MANQUAIT à la table, et « 625-05-… » rendait donc « greffe inconnu » sur un
+  //   greffe qui existe. Observé sur la page officielle du MJQ (mise à jour du
+  //   2026-07-22), point de service itinérant, aucune adresse publiée.
+  "625": {
+    palais_de_justice: "Senneterre",
+    district_judiciaire: "Abitibi",
+    point_de_service: true,
+    palais_key: null,
+  },
   "635": {
     palais_de_justice: "Aupaluk",
     district_judiciaire: "Abitibi",
@@ -371,36 +388,4 @@ export const GREFFES: Readonly<Record<string, Greffe>> = {
     point_de_service: false,
     palais_key: "sorel-tracy",
   },
-};
-
-/**
- * Localités desservies par les quatre greffes de cour itinérante.
- *
- * N'existe que dans `athena/scripts/seed_reference_data.py` — jamais rendu par le
- * parseur d'Athéna, faute d'avoir été remonté dans sa table. Repris ici parce que
- * c'est précisément ce qu'un praticien veut savoir d'un greffe sans adresse fixe.
- */
-export const LOCALITES_ITINERANTES: Readonly<Record<string, readonly string[]>> = {
-  "614": [
-    "Eastmain",
-    "Mistissini",
-    "Nemiscau",
-    "Oujé-Bougoumou",
-    "Waskaganish",
-    "Waswanipi",
-    "Wemindji",
-    "Whapmagoostui",
-  ],
-  "635": ["Kangiqsualujjuaq", "Kangiqsujuaq", "Kangirsuk", "Quaqtaq", "Tasiujaq"],
-  "640": ["Inukjuak", "Ivujivik", "Kuujjuaraapik", "Puvirnituq", "Salluit", "Umiujaq"],
-  "652": [
-    "Fermont",
-    "Havre-Saint-Pierre",
-    "Kawawachikamach",
-    "La Romaine",
-    "Natashquan",
-    "Port-Cartier",
-    "Saint-Augustin",
-    "Schefferville",
-  ],
 };

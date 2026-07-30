@@ -195,13 +195,24 @@ describe("§17.4 — palais_get", () => {
     expect(out).toContain("n'établit PAS qu'il n'en existe aucune");
   });
 
-  it("Kuujjuaq : palais publié qu'aucun greffe ne nomme, et on le DIT", async () => {
+  it("Kuujjuaq est rattaché au greffe 635 PAR LE MJQ, non par déduction", async () => {
+    // Athéna le laissait orphelin, refusant de le rattacher au jugé à un greffe
+    // itinérant du Nunavik. La page officielle tranche : greffe 635, siège fixe.
     const out = texte(
       await callTool("palais_get", { palais: "Kuujjuaq" }, toolCtx(fakeClient({}))),
     );
     expect(out).toContain("Kuujjuaq");
-    expect(out).toContain("Aucun numéro de greffe");
-    expect(out).toContain("vaudrait moins que son absence");
+    expect(out).toContain("Greffes qui y siègent");
+    expect(out).toContain("635");
+  });
+
+  it("le greffe 635 rend enfin une adresse, et dit d'où elle vient", async () => {
+    const out = texte(
+      await callTool("palais_get", { greffe_number: "635" }, toolCtx(fakeClient({}))),
+    );
+    expect(out).toContain("Siège fixe : Kuujjuaq");
+    expect(out).toContain("non par déduction");
+    expect(out).toContain("151, rue Siuralikuut");
   });
 
   it("un greffe absent de la table n'est pas déclaré inexistant", async () => {

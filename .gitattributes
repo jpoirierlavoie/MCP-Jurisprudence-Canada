@@ -16,3 +16,10 @@
 *.md   text eol=lf
 *.yml  text eol=lf
 *.toml text eol=lf
+
+# Pages officielles enregistrées à la main, et fichiers d'exclusion : même règle, pour
+# que `git add` cesse d'avertir et que le HTML source reste octet pour octet celui que
+# `scripts/extraire-lieux-mjq.mjs` a lu.
+*.html text eol=lf
+.gitignore text eol=lf
+.gitattributes text eol=lf

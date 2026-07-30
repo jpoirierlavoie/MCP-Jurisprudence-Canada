@@ -23,8 +23,9 @@ src/citation/     analyseur PUR — parse, normalize, compare. AUCUNE E/S.
 src/canlii/       client sortant : étranglement, réessais, redactUrl
 src/store/        D1 : cases (+FTS) · databases (auto-correction) · citator · telemetry
                   lookup.ts — la boucle d'auto-correction, en UN SEUL exemplaire
-src/qc/           §17 — tables du Québec, PURES : palais · greffes · juridictions ·
-                  forums · dossier.ts (parseur) · lookup.ts. Constantes, PAS de D1.
+src/qc/           §17 — tables du Québec, PURES : palais · greffes · lieux (MJQ) ·
+                  juridictions · forums · dossier.ts (parseur) · lookup.ts.
+                  Constantes, PAS de D1.
 src/format/       fr.ts (dates, listes) · render.ts (gabarits annexe A + mises en garde)
 src/backfill.ts   §11 — écrit, testé, INERTE
 ```
@@ -38,7 +39,7 @@ table en mémoire (aucune E/S). Ne pas fusionner.
 ```bash
 npx wrangler types && npx tsc --noEmit     # toujours avant commit
 npx biome check .                          # --write pour corriger
-npx vitest run                             # 407 tests, sans réseau ni clef
+npx vitest run                             # 409 tests, sans réseau ni clef
 npx wrangler dev                           # exige .dev.vars
 npx wrangler deploy --dry-run              # valide paquet + config, sans jeton
 npx wrangler d1 migrations apply canlii --local|--remote
@@ -120,11 +121,20 @@ node scripts/refresh-databases.mjs --remote --sql   # réconciliation §4.3
 17. **Les tables de `src/qc/` sont un RELEVÉ DATÉ, pas une vérité.** Leur mode de panne
     n'est pas l'absence mais la **péremption** : une adresse juste hier, fausse aujourd'hui,
     rendue avec le même aplomb. D'où `GARDE_PALAIS`, qui porte la date **dans le corps** de
-    chaque réponse. Et trois pièges à ne PAS « corriger » : `point_de_service` désigne les
-    cours itinérantes côté greffe mais les points de service du MJQ côté palais (ils
-    divergent par construction) ; le nom d'un palais n'est pas sa ville (Chicoutimi est à
-    Saguenay) ; une `palais_key` nulle signifie adresse **inconnue**, jamais inexistante —
-    le pendant exact de la règle INTROUVABLE.
+    chaque réponse. Et trois pièges à ne PAS « corriger » : `point_de_service` (greffe
+    itinérant) ≠ `location_type` (point de service du MJQ) ≠ `lieux.itinerant` (le LIEU) —
+    les **trois** divergent par construction ; le nom d'un palais n'est pas sa ville
+    (Chicoutimi est à Saguenay) ; une adresse absente est **inconnue**, jamais inexistante —
+    le pendant exact de la règle INTROUVABLE. On sort de cette liste par une SOURCE :
+    `lieux.ts` en a sorti le greffe 635, jamais en assouplissant la formulation.
+19. **`lieux.ts` est le relevé OFFICIEL du MJQ (2026-07-22), et il fait autorité sur le
+    rattachement.** Un greffe dessert souvent PLUSIEURS lieux, ce que `palais_key` (1:1) ne
+    sait pas dire. La réconciliation du 2026-07-30 en a tiré deux corrections réelles :
+    le greffe **625 (Senneterre)** manquait — « 625-… » rendait « greffe inconnu » sur un
+    greffe qui existe — et **Kuujjuaq** relève du greffe **635**, ce qu'Athéna refusait de
+    deviner. `adresseDuGreffe` essaie `palais_key` PUIS le siège fixe du MJQ : les
+    gestionnaires doivent passer par elle, jamais lire `palais_key` en direct, sous peine
+    de faire diverger deux outils sur le même greffe.
 18. **Le parseur de dossiers est un PORT, éprouvé par différentiel.** `src/qc/dossier.ts`
     reproduit `parse_court_file_number` d'Athéna, et `test/fixtures/dossier-athena.json`
     rejoue 127 entrées des deux côtés. Il n'y a **ni somme de contrôle ni règle d'année** :
