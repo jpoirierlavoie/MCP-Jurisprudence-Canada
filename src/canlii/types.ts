@@ -62,13 +62,16 @@ export interface CaseMetadata {
   concatenatedId?: string;
 }
 
-/** `GET caseCitator/en/{databaseId}/{caseId}/{metadataType}` */
-export interface CitedCasesResponse {
-  citedCases?: CaseListItem[];
-}
-export interface CitingCasesResponse {
-  citingCases?: CaseListItem[];
-}
+/**
+ * `GET caseCitator/en/{databaseId}/{caseId}/{metadataType}`
+ *
+ * Les variantes `citedCases` et `citingCases` n'ont PAS d'interface : `fetchEdges`
+ * les lit par accès dynamique `payload[metadataType]`, la clef de la réponse étant
+ * exactement le `metadataType` du chemin. Les typer serait une troisième écriture de
+ * la même correspondance (METADATA_TYPE, le chemin, le type), donc une occasion de
+ * divergence — sans rien vérifier de plus. Seule `citedLegislations` est typée, parce
+ * que sa charge utile est d'une autre forme (LegislationListItem).
+ */
 export interface CitedLegislationsResponse {
   citedLegislations?: LegislationListItem[];
 }

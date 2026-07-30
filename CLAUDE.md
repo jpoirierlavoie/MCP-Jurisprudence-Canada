@@ -31,7 +31,7 @@ src/backfill.ts   §11 — écrit, testé, INERTE
 ```bash
 npx wrangler types && npx tsc --noEmit     # toujours avant commit
 npx biome check .                          # --write pour corriger
-npx vitest run                             # 184 tests, sans réseau ni clef
+npx vitest run                             # 210 tests, sans réseau ni clef
 npx wrangler dev                           # exige .dev.vars
 npx wrangler deploy --dry-run              # valide paquet + config, sans jeton
 npx wrangler d1 migrations apply canlii --local|--remote
@@ -48,41 +48,52 @@ node scripts/refresh-databases.mjs --remote --sql   # réconciliation §4.3
    `{"fr": "2008csc9"}`. Clée sur la réponse, la fiche est rangée là où personne ne la
    cherche : le cache ne sert jamais et chaque vérification rappelle l'API. *(Défaut réel,
    trouvé par test.)*
-3. **Les mises en garde de §2 vivent dans le CORPS des réponses**, pas seulement dans les
+3. **`source` distingue une FICHE d'une ligne de balayage, et ne se rétrograde jamais.**
+   Un balayage (`browse`, `find`) persiste 4 champs : ni date, ni numéro de dossier, ni
+   hyperlien. Deux règles en découlent, et elles se tiennent :
+   *(a)* seule une ligne `source = 'lookup'` peut servir de fiche ou de vérification —
+   servir une ligne de balayage rendrait un document amputé étiqueté « index local », et
+   pire, ferait sauter en silence le contrôle de l'année faute de date ;
+   *(b)* l'UPSERT enregistre la MEILLEURE provenance atteinte, jamais la dernière — sinon
+   tout balayage recroisant une fiche déjà résolue la disqualifierait du cache et
+   rachèterait l'appel. Un suivi quotidien à fenêtres chevauchantes recroise TOUT : le
+   cache ne servirait jamais. *(Les deux moitiés sont des défauts réels, trouvés par
+   test ; verrouillées dans `test/persist.test.ts` et `test/tools.test.ts`.)*
+4. **Les mises en garde de §2 vivent dans le CORPS des réponses**, pas seulement dans les
    descriptions d'outils. `test/garde.test.ts` échoue si elles disparaissent. Un test de
    garde qui échoue se **répare en remettant la garantie**, jamais en ajustant le test.
    Corollaire : **pas de `structuredContent`, pas d'`outputSchema`** — un client qui reçoit
    un objet typé laisse tomber la prose, et la réserve part avec elle SANS qu'aucun test
    n'échoue. Argument complet, conditions de réouverture et forme à adopter le cas échéant :
    `docs/decisions/001-sortie-texte-et-outputSchema.md`.
-4. **Ne jamais journaliser `request.url`** : le secret partagé est dans le chemin (§9.2).
+5. **Ne jamais journaliser `request.url`** : le secret partagé est dans le chemin (§9.2).
    Aucune sortie d'outil ne contient d'URL `api.canlii.org` — elles portent la clef d'API.
-5. **La boucle d'auto-correction (§6.4) vit dans `src/store/lookup.ts`, en un seul
+6. **La boucle d'auto-correction (§6.4) vit dans `src/store/lookup.ts`, en un seul
    exemplaire.** Deux implémentations d'une même heuristique d'apprentissage divergeraient,
    et l'une enseignerait au répertoire ce que l'autre ignore. *(Une duplication a déjà été
    supprimée pour ce motif.)*
-6. **`NEUTRAL` porte le drapeau `/i`** — sans lui, « 2020 qcca 495 » (exigé par §13) ne
+7. **`NEUTRAL` porte le drapeau `/i`** — sans lui, « 2020 qcca 495 » (exigé par §13) ne
    s'analyse pas. Le drapeau fait alors capturer « CanLII » comme code de tribunal : deux
    parades cumulatives (masquage des plages CanLII appariées d'abord, puis rejet explicite
    du code `CANLII`). Retirer l'une rouvre le défaut ; les deux sont testées.
-7. **Un tribunal absent du répertoire ⇒ INTROUVABLE SANS appel sortant** (§6.4 point 3).
+8. **Un tribunal absent du répertoire ⇒ INTROUVABLE SANS appel sortant** (§6.4 point 3).
    Un appel voué à l'échec coûte du quota et produirait un « introuvable » qui ferait croire
    à l'absence de la décision.
-8. **Une panne réseau n'est PAS une absence.** Un 401, un 429 ou une expiration rendent
+9. **Une panne réseau n'est PAS une absence.** Un 401, un 429 ou une expiration rendent
    `INDÉTERMINÉE`, jamais `INTROUVABLE` : affirmer une absence qu'on n'a pas constatée est
    exactement ce que §2 interdit. Seul un **404** justifie un rattrapage puis un INTROUVABLE.
-9. **Un appariement d'intitulé PARTIEL vaut DISCORDANTE, jamais CONFIRMÉE** (§6.5). Mieux
-   vaut un faux signalement qu'une fausse assurance.
-10. **Les intitulés anonymisés se comparent par leur NUMÉRO** (« Droit de la famille —
+10. **Un appariement d'intitulé PARTIEL vaut DISCORDANTE, jamais CONFIRMÉE** (§6.5). Mieux
+    vaut un faux signalement qu'une fausse assurance.
+11. **Les intitulés anonymisés se comparent par leur NUMÉRO** (« Droit de la famille —
     20495 ») : ils ne contiennent aucun nom de partie, et deux décisions distinctes de la
     même série partagent tous leurs jetons alphabétiques.
-11. **Le citateur n'accepte que `en`** dans le chemin (annexe B). D'où l'absence de tout
+12. **Le citateur n'accepte que `en`** dans le chemin (annexe B). D'où l'absence de tout
     paramètre `lang` sur `canlii_citator` : en exposer un serait mensonger.
-12. **La télémétrie n'échoue jamais l'outil qu'elle observe** : table absente, écriture
+13. **La télémétrie n'échoue jamais l'outil qu'elle observe** : table absente, écriture
     refusée — tout est avalé.
-13. **Les fins de ligne sont LF dans la copie de travail** (`.gitattributes`) : sinon Biome
+14. **Les fins de ligne sont LF dans la copie de travail** (`.gitattributes`) : sinon Biome
     local (CRLF sous Windows) et la CI (Linux) divergent en permanence.
-14. **§11 est inerte et le reste : la question est TRANCHÉE (2026-07-23) — pas de
+15. **§11 est inerte et le reste : la question est TRANCHÉE (2026-07-23) — pas de
     moissonnage de masse.** Deux verrous : `BACKFILL_ENABLED="false"` et aucun cron
     quotidien déclaré. Ce n'est plus une question ouverte mais une décision du
     praticien : ne pas basculer le drapeau, même « pour essayer ». Le remplissage du
@@ -105,7 +116,15 @@ Coder → `wrangler types` → `tsc --noEmit` → `biome check` → `vitest run`
 
 ## État
 
-Code complet, 184 tests verts. **Reste à faire avant de considérer le connecteur livré :**
-la réconciliation du répertoire (§4.3) contre l'API vivante — les lignes fédérales
-`verified = 0` sont des hypothèses non vérifiées, et la spécification interdit de les livrer
-telles quelles.
+**Livré et en production** (2026-07-23) sur `jurisprudence.poirierlavoie.ca`, 210 tests
+verts. La réconciliation du répertoire (§4.3) est **faite** contre l'API vivante : elle a
+démenti cinq hypothèses d'amorçage, consignées avec leur preuve d'observation dans
+`migrations/0003_reconcile_court_codes.sql` (`caf-fca`/`cf-fc` inexistants — les vraies
+bases sont `fca` et `fct` ; fragment français `cci` et non `tcc` ; le TAL a gardé le
+`databaseId` de la Régie du logement, `qcrdl`). Les tests de `test/persist.test.ts`
+verrouillent ces six correspondances : ils empêchent une réapplication de 0002 seule de
+ressusciter les hypothèses fausses sur une base neuve.
+
+Les lignes encore `verified = 0` ne sont pas un reliquat : elles sont **inertes par
+construction** (invariant 8 — un tribunal absent du répertoire rend INTROUVABLE sans
+appel sortant), et se confirmeront à l'usage par la boucle de §6.4.

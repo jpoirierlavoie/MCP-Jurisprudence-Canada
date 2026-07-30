@@ -144,12 +144,21 @@ npx wrangler secret put MCP_SHARED_SECRET
 npx wrangler deploy
 ```
 
-### Amorçage obligatoire du répertoire (§4.3)
+### Répertoire des tribunaux (§4.3) — réconcilié, et à re-vérifier périodiquement
 
 Les correspondances « code de citation → databaseId » ne sont documentées que pour
-`csc-scc`. Tout le reste est une **hypothèse** que le système corrige à l'usage, et les
-identifiants fédéraux composés (`caf-fca`, `cf-fc`, `cci-tcc`) ne sont pas documentés du
-tout.
+`csc-scc`. Tout le reste était une **hypothèse** d'amorçage, et les identifiants fédéraux
+composés n'étaient pas documentés du tout.
+
+**La réconciliation a été faite contre l'API vivante le 2026-07-23**, et elle a démenti
+cinq hypothèses : `caf-fca` et `cf-fc` n'existent pas (les vraies bases sont `fca` et
+`fct`), le fragment français de la Cour canadienne de l'impôt est `cci` et non `tcc`, et
+le TAL a gardé le `databaseId` de la Régie du logement (`qcrdl`) — exactement le piège de
+renommage que la spécification anticipait. Les valeurs mesurées, avec leur preuve
+d'observation, sont dans `migrations/0003_reconcile_court_codes.sql` : **une installation
+neuve les obtient donc par les migrations**, sans manœuvre manuelle.
+
+Ce qui reste utile, et qu'il faut refaire quand un tribunal est créé, fusionné ou renommé :
 
 ```bash
 node scripts/refresh-databases.mjs --remote --sql
@@ -157,8 +166,8 @@ node scripts/refresh-databases.mjs --remote --sql
 
 Le script **n'écrit rien en base** : il rafraîchit le répertoire, dénonce les hypothèses que
 CanLII dément, et produit un gabarit SQL à relire. Corriger automatiquement une
-correspondance de tribunal reviendrait à figer une erreur en silence. **Le connecteur n'est
-pas livré tant que la réconciliation n'est pas faite.**
+correspondance de tribunal reviendrait à figer une erreur en silence — c'est pourquoi la
+dernière étape reste un geste humain.
 
 ### Recette manuelle (§14 étape 8)
 

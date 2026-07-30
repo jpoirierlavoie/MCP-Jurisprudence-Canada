@@ -233,15 +233,6 @@ export async function getCachedAny(
   return r ?? null;
 }
 
-/** Recherche une fiche par sa citation neutre normalisée, tous tribunaux confondus. */
-export async function findByNeutral(db: D1Database, neutral: string): Promise<CaseRow[]> {
-  const r = await db
-    .prepare("SELECT * FROM cases WHERE neutral_cite = ? ORDER BY decision_date DESC LIMIT 10")
-    .bind(neutral)
-    .all<CaseRow>();
-  return r.results ?? [];
-}
-
 /**
  * Construit une requête FTS5 sûre à partir d'un texte libre.
  *
@@ -328,12 +319,4 @@ export async function listCases(
     .bind(databaseId, limit, offset)
     .all<CaseRow>();
   return r.results ?? [];
-}
-
-export async function countCases(db: D1Database, databaseId: string): Promise<number> {
-  const r = await db
-    .prepare("SELECT COUNT(*) AS n FROM cases WHERE database_id = ?")
-    .bind(databaseId)
-    .first<{ n: number }>();
-  return r?.n ?? 0;
 }

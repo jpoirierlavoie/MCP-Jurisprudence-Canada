@@ -53,11 +53,3 @@ export function motsCles(bruts: string | null | undefined, max = 12): string | n
 export function joindre(parts: Array<string | null | undefined>, sep = " · "): string {
   return parts.filter((p): p is string => typeof p === "string" && p.trim().length > 0).join(sep);
 }
-
-/** Indente chaque ligne d'un bloc (rendu des listes numérotées de l'annexe A). */
-export function indenter(texte: string, prefixe = "   "): string {
-  return texte
-    .split("\n")
-    .map((l) => (l.length > 0 ? prefixe + l : l))
-    .join("\n");
-}
