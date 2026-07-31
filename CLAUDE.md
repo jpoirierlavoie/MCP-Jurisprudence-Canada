@@ -27,6 +27,7 @@ src/qc/           §17 — tables du Québec, PURES : palais · greffes · lieux
                   juridictions · forums · dossier.ts (parseur) · lookup.ts.
                   Constantes, PAS de D1.
 src/format/       fr.ts (dates, listes) · render.ts (gabarits annexe A + mises en garde)
+src/site.ts       §18 — page publique GET /. site.i18n.ts : l'ANGLAIS seulement.
 src/backfill.ts   §11 — écrit, testé, INERTE
 ```
 
@@ -39,7 +40,7 @@ table en mémoire (aucune E/S). Ne pas fusionner.
 ```bash
 npx wrangler types && npx tsc --noEmit     # toujours avant commit
 npx biome check .                          # --write pour corriger
-npx vitest run                             # 409 tests, sans réseau ni clef
+npx vitest run                             # 437 tests, sans réseau ni clef
 npx wrangler dev                           # exige .dev.vars
 npx wrangler deploy --dry-run              # valide paquet + config, sans jeton
 npx wrangler d1 migrations apply canlii --local|--remote
@@ -135,7 +136,16 @@ node scripts/refresh-databases.mjs --remote --sql   # réconciliation §4.3
     deviner. `adresseDuGreffe` essaie `palais_key` PUIS le siège fixe du MJQ : les
     gestionnaires doivent passer par elle, jamais lire `palais_key` en direct, sous peine
     de faire diverger deux outils sur le même greffe.
-18. **Le parseur de dossiers est un PORT, éprouvé par différentiel.** `src/qc/dossier.ts`
+18. **La page publique DÉRIVE des données, elle ne les recopie pas (§18).** Outils et
+    schémas viennent de `listToolDescriptors()`, les issues d'analyse du VRAI parseur
+    exécuté au rendu, les greffes des tables de `src/qc/`, les réserves des constantes
+    `GARDE_*`. Une valeur recopiée deviendrait fausse **sans qu'aucun test n'échoue**.
+    Trois propriétés de sa route sont load-bearing : égalité stricte sur `/` ;
+    **délibérément hors du bloc `/mcp`** (n'y remontez JAMAIS le contrôle d'origine
+    « par cohérence », la page cesserait de répondre aux visiteurs venus d'ailleurs) ;
+    et **aucun en-tête CORS**, sans quoi la page deviendrait un oracle. Elle survit au
+    coupe-circuit : exception assumée, car elle ne porte ni secret ni donnée vivante.
+19. **Le parseur de dossiers est un PORT, éprouvé par différentiel.** `src/qc/dossier.ts`
     reproduit `parse_court_file_number` d'Athéna, et `test/fixtures/dossier-athena.json`
     rejoue 127 entrées des deux côtés. Il n'y a **ni somme de contrôle ni règle d'année** :
     ne pas en inventer. Un préfixe alphabétique inconnu reste prudent et n'est **jamais**

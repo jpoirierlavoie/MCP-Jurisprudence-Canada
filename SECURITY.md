@@ -28,6 +28,7 @@ In scope:
 - The deployed Worker at `jurisprudence.poirierlavoie.ca`
 - Code in this repository
 - The MCP endpoint (`POST /mcp/<secret>`) and its authentication
+- The public page (`GET /`)
 
 Out of scope:
 - Social engineering of the maintainer or anyone else
@@ -98,6 +99,22 @@ Known and accepted properties of this model:
   `/health` included.
 - Rotating the secret is a single `wrangler secret put MCP_SHARED_SECRET` followed by
   updating the connector URL; no redeployment of code is required.
+- `GET /` serves a public documentation page. It is static, accepts no input, calls
+  nothing and writes nothing. It never reads `MCP_SHARED_SECRET` — it documents the
+  endpoint's *shape*, `/mcp/<secret>`, and a test rejects any 32+ hex-character
+  string, any `Bearer`, and any mention of `api.canlii.org` or `api_key` in the body.
+  It carries **no CORS headers**, so no other origin can read it; and it is served
+  **outside** the `/mcp` guard block, so the DNS-rebinding origin check never applies
+  to it. That check must never be hoisted to global scope: doing so would refuse the
+  page to any visitor arriving from an external link.
+- The page is served **even when `MCP_ENABLED=false`**, unlike `/health`. That is a
+  deliberate exception: the kill switch protects the MCP surface — the API key and its
+  quota — whereas a documentation page exists to be read, carries no secret and no
+  live data, and is most wanted precisely when the connector is down.
+- Serving `text/html` makes this a document origin, so `/` alone carries
+  `Content-Security-Policy: default-src 'none'` (with `frame-ancestors 'none'`),
+  `X-Content-Type-Options: nosniff` and `Referrer-Policy`. Nothing is loaded from a
+  third party: no CDN, no font, no image, no analytics.
 
 **Rate limiting.** The endpoint is limited to **60 requests per minute per IP**, enforced
 inside the Worker via the `ratelimits` binding rather than by a zone WAF rule. Two
