@@ -10,6 +10,67 @@ La spécification qui fait foi est [`SPEC_CANLII_MCP.md`](SPEC_CANLII_MCP.md), v
 racine. Ses §1 (décisions arrêtées) et §2 (contrat de vérité) se lisent **avant** toute
 modification.
 
+---
+
+## ⚠ RÈGLE DE PROPAGATION — obligatoire, sans exception
+
+```
+╔═════════════════════════════════════════════════════════════════════════════╗
+║ AUCUNE modification de ce depot n'est terminee tant que ses repercussions   ║
+║ n'ont pas ete EVALUEES sur les cinq surfaces ci-dessous, et INCLUSES dans   ║
+║ le MEME changement.                                                         ║
+║                                                                             ║
+║   1. les OUTILS MCP (registre, gestionnaires, familles de prefixes)         ║
+║   2. leurs DESCRIPTIONS et leurs titres                                     ║
+║   3. leurs SCHEMAS d'entree                                                 ║
+║   4. README.md                                                              ║
+║   5. la PAGE PUBLIQUE (src/site.ts + src/site.i18n.ts) et §18               ║
+╚═════════════════════════════════════════════════════════════════════════════╝
+```
+
+**Le motif.** Ces cinq surfaces décrivent la MÊME chose à cinq publics : le modèle, le
+praticien, le lecteur de la spécification, le visiteur de la page, et le prochain
+contributeur. Quand l'une prend du retard, elle ne tombe pas en panne — **elle continue
+de répondre, avec assurance, quelque chose de faux**. Un outil renommé dont le README
+garde l'ancien nom, un schéma resserré que la page annonce encore large, une réserve
+retirée du corps mais laissée en vitrine : aucun de ces défauts ne lève d'erreur. C'est
+exactement le mode de panne que §2 interdit, déplacé dans la documentation.
+
+**Le coût en jetons de cette vérification est ASSUMÉ et n'est pas un motif de l'abréger.**
+Relire quatre fichiers coûte moins qu'un praticien qui se fie à une description périmée.
+
+### Table de propagation
+
+| Si vous touchez… | …vérifiez ET mettez à jour |
+|---|---|
+| **un outil** (ajout, retrait, renommage) | `src/mcp/registry.ts` · le gestionnaire dans `src/mcp/handlers/` · `OUTILS_EN` dans `src/site.i18n.ts` (parité testée **dans les deux sens**) · le tableau ET le compte de `README.md` §« Les treize outils » · §7 ou §17 de la spécification · les compteurs de `test/garde.test.ts` et `test/rpc.test.ts` · la **liste triée des noms** dans `test/rpc.test.ts` · le préfixe choisi (`canlii_` = réponse de CanLII ; `greffe_`/`palais_` = table locale — invariant 16) |
+| **une description ou un titre** | la page les rend **verbatim** : relancer `test/site.test.ts` (formulations interdites) et `test/garde.test.ts` (sous-chaînes épinglées) · `OUTILS_EN` doit rester une TRADUCTION, jamais une copie |
+| **un `inputSchema`** | `src/mcp/validate.ts` n'implémente qu'un SOUS-ENSEMBLE de JSON-Schema : ne pas déclarer ce qu'il ne sait pas imposer · la page génère ses tableaux de schéma depuis le même objet · `additionalProperties: false` reste obligatoire |
+| **une constante `GARDE_*`** | elle vit dans le corps des réponses **et** sur la page · `test/garde.test.ts` · `MARQUEUR_RECONCILIATION` est en plus une chaîne de COUPLAGE lue par `scripts/refresh-databases.mjs` |
+| **une table de `src/qc/`** | les comptes de `test/qc.tables.test.ts` (51 palais · 57 greffes · 27 juridictions · 20 forums · 36 districts) · le nombre de lignes de la table de la page (`test/site.test.ts`) · « 43 palais et 8 points de service » dans `README.md` · les dates `RELEVE_LE` et `MJQ_MAJ` affichées |
+| **la page** | `test/site.test.ts` · §18 de la spécification · la section « Page publique » de `README.md` · le style reste **identique** à celui du connecteur jumeau (invariant 21) |
+| **le comportement d'un outil** | la page peut le DOCUMENTER : les exemples d'analyse y sont produits par le vrai parseur au rendu, mais la prose qui les entoure, elle, est écrite à la main |
+
+### Comment vérifier
+
+La porte habituelle ne suffit pas : elle attrape la dérive **testée**, pas la dérive
+**rédactionnelle**. Après elle, relire réellement les surfaces concernées.
+
+```bash
+npx wrangler types && npx tsc --noEmit && npx biome check . && npx vitest run
+
+# Puis, pour tout changement d'outil : CONFRONTER le registre au README.
+# Un écart ici est une dérive, MÊME SI la suite entière est verte.
+diff <(grep -oE "^  (canlii|greffe|palais)_[a-z_]+" src/mcp/registry.ts | tr -d ' ' | sort) \
+     <(grep -oE '`(canlii|greffe|palais)_[a-z_]+`' README.md | tr -d '`' | sort -u)
+```
+
+La page, elle, ne peut pas dériver sur ce point : elle DÉRIVE du registre (invariant 19).
+C'est le README et la spécification qui prennent du retard, parce qu'ils sont écrits à la
+main — d'où la confrontation ci-dessus, et la relecture des §7, §17 et §18.
+
+---
+
 ## Architecture
 
 Worker TypeScript sans cadriciel, **zéro dépendance d'exécution** (D2), base D1 `canlii`,
@@ -40,7 +101,7 @@ table en mémoire (aucune E/S). Ne pas fusionner.
 ```bash
 npx wrangler types && npx tsc --noEmit     # toujours avant commit
 npx biome check .                          # --write pour corriger
-npx vitest run                             # 437 tests, sans réseau ni clef
+npx vitest run                             # 439 tests, sans réseau ni clef
 npx wrangler dev                           # exige .dev.vars
 npx wrangler deploy --dry-run              # valide paquet + config, sans jeton
 npx wrangler d1 migrations apply canlii --local|--remote
@@ -128,7 +189,7 @@ node scripts/refresh-databases.mjs --remote --sql   # réconciliation §4.3
     (Chicoutimi est à Saguenay) ; une adresse absente est **inconnue**, jamais inexistante —
     le pendant exact de la règle INTROUVABLE. On sort de cette liste par une SOURCE :
     `lieux.ts` en a sorti le greffe 635, jamais en assouplissant la formulation.
-19. **`lieux.ts` est le relevé OFFICIEL du MJQ (2026-07-22), et il fait autorité sur le
+18. **`lieux.ts` est le relevé OFFICIEL du MJQ (2026-07-22), et il fait autorité sur le
     rattachement.** Un greffe dessert souvent PLUSIEURS lieux, ce que `palais_key` (1:1) ne
     sait pas dire. La réconciliation du 2026-07-30 en a tiré deux corrections réelles :
     le greffe **625 (Senneterre)** manquait — « 625-… » rendait « greffe inconnu » sur un
@@ -136,7 +197,7 @@ node scripts/refresh-databases.mjs --remote --sql   # réconciliation §4.3
     deviner. `adresseDuGreffe` essaie `palais_key` PUIS le siège fixe du MJQ : les
     gestionnaires doivent passer par elle, jamais lire `palais_key` en direct, sous peine
     de faire diverger deux outils sur le même greffe.
-18. **La page publique DÉRIVE des données, elle ne les recopie pas (§18).** Outils et
+19. **La page publique DÉRIVE des données, elle ne les recopie pas (§18).** Outils et
     schémas viennent de `listToolDescriptors()`, les issues d'analyse du VRAI parseur
     exécuté au rendu, les greffes des tables de `src/qc/`, les réserves des constantes
     `GARDE_*`. Une valeur recopiée deviendrait fausse **sans qu'aucun test n'échoue**.
@@ -145,17 +206,30 @@ node scripts/refresh-databases.mjs --remote --sql   # réconciliation §4.3
     « par cohérence », la page cesserait de répondre aux visiteurs venus d'ailleurs) ;
     et **aucun en-tête CORS**, sans quoi la page deviendrait un oracle. Elle survit au
     coupe-circuit : exception assumée, car elle ne porte ni secret ni donnée vivante.
-19. **Le parseur de dossiers est un PORT, éprouvé par différentiel.** `src/qc/dossier.ts`
+20. **Le parseur de dossiers est un PORT, éprouvé par différentiel.** `src/qc/dossier.ts`
     reproduit `parse_court_file_number` d'Athéna, et `test/fixtures/dossier-athena.json`
     rejoue 127 entrées des deux côtés. Il n'y a **ni somme de contrôle ni règle d'année** :
     ne pas en inventer. Un préfixe alphabétique inconnu reste prudent et n'est **jamais**
     une erreur. Une divergence du différentiel se répare dans le code, pas dans la fixture.
+21. **La page partage le style du connecteur JUMEAU, au caractère près.** Les deux jeux de
+    variables, la police (`16px/1.6 Georgia`), les tailles de titres et la grille (barre
+    latérale de 13rem, rupture à 78rem) sont repris de « Législation du Québec ». Les deux
+    sites appartiennent au même praticien et se consultent l'un après l'autre : une
+    divergence de teinte ou de police les ferait passer pour deux outils sans rapport.
+    Toute retouche ici se porte là-bas, et réciproquement. Deux gardes tiennent la
+    cohérence interne : **aucune couleur en dur** hors des deux jeux (une couleur figée ne
+    bascule pas et devient invisible dans l'un des thèmes), et les deux jeux déclarent
+    **exactement** les mêmes variables.
 
 ## Procédure sûre
 
-Coder → `wrangler types` → `tsc --noEmit` → `biome check` → `vitest run` →
-`wrangler deploy --dry-run` → déployer. **Les migrations D1 passent AVANT le déploiement**
-(`deploy.yml`) : l'ordre inverse met en ligne du code qui lit des colonnes inexistantes.
+Coder → **propager (règle ci-dessus)** → `wrangler types` → `tsc --noEmit` →
+`biome check` → `vitest run` → `wrangler deploy --dry-run` → déployer.
+
+La propagation vient **avant** la porte technique, et non après : c'est la seule étape
+qu'aucune commande ne peut réclamer à votre place. **Les migrations D1 passent AVANT le
+déploiement** (`deploy.yml`) : l'ordre inverse met en ligne du code qui lit des colonnes
+inexistantes.
 
 ## Secrets
 
@@ -168,8 +242,11 @@ Coder → `wrangler types` → `tsc --noEmit` → `biome check` → `vitest run`
 
 ## État
 
-**Livré et en production** (2026-07-23) sur `jurisprudence.poirierlavoie.ca`, 210 tests
-verts. La réconciliation du répertoire (§4.3) est **faite** contre l'API vivante : elle a
+**Livré et en production** sur `jurisprudence.poirierlavoie.ca`, 439 tests verts. Treize
+outils — dix `canlii_*`, trois `greffe_*`/`palais_*` — et une page publique bilingue sur
+la même origine (§18).
+
+La réconciliation du répertoire (§4.3) est **faite** contre l'API vivante : elle a
 démenti cinq hypothèses d'amorçage, consignées avec leur preuve d'observation dans
 `migrations/0003_reconcile_court_codes.sql` (`caf-fca`/`cf-fc` inexistants — les vraies
 bases sont `fca` et `fct` ; fragment français `cci` et non `tcc` ; le TAL a gardé le
