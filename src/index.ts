@@ -33,6 +33,7 @@ import {
   resultResponse,
   type ToolResult,
 } from "./mcp/rpc";
+import { pagePubliqueHtml } from "./site";
 
 /** Versions du protocole servies. La plus élevée EN TÊTE (§8). */
 const VERSIONS = ["2025-06-18", "2025-03-26"] as const;
@@ -217,6 +218,38 @@ function notFound(): Response {
   return new Response("Not found", { status: 404 });
 }
 
+/**
+ * Page publique (§18).
+ *
+ * ⚠ AUCUN en-tête CORS, comme `/health`. Sans `Access-Control-Allow-Origin`, aucun
+ *   script d'une autre origine ne peut LIRE cette réponse : la page ne peut pas
+ *   servir d'oracle. En ajouter « pour faire comme le reste » serait une régression.
+ *
+ * Ces en-têtes de sécurité sont les PREMIERS du dépôt, et c'est normal : servir du
+ * `text/html` fait de cette origine une origine de DOCUMENT, ce qu'elle n'était pas
+ * tant que tout était du JSON consommé hors navigateur.
+ */
+function pagePublique(request: Request): Response {
+  const headers: Record<string, string> = {
+    "Content-Type": "text/html; charset=utf-8",
+    // Rien n'est chargé d'un tiers : le style et le script sont en ligne, il n'y a
+    // ni police distante, ni CDN, ni image.
+    "Content-Security-Policy":
+      "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; " +
+      "img-src data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+    "X-Content-Type-Options": "nosniff",
+    "Referrer-Policy": "strict-origin-when-cross-origin",
+    // Volontairement court, et SANS `s-maxage` long : le rendu ne coûte rien (des
+    // tables en mémoire), alors qu'un cache d'arête durable ferait survivre la page
+    // à son propre déploiement.
+    "Cache-Control": "public, max-age=600",
+  };
+  const html = pagePubliqueHtml();
+  return request.method === "HEAD"
+    ? new Response(null, { status: 200, headers })
+    : new Response(html, { status: 200, headers });
+}
+
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
@@ -228,6 +261,33 @@ export default {
 
     if (pathname === "/health") {
       return actif ? jsonResponse({ status: "ok" }) : notFound();
+    }
+
+    // ── Page publique (§18) ──────────────────────────────────────────────────
+    //
+    // ⚠ ÉGALITÉ STRICTE, jamais `startsWith("/")` : le `notFound()` final doit rester
+    //   la réponse de tout le reste, et c'est épinglé par un test.
+    //
+    // ⚠ DÉLIBÉRÉMENT HORS de la garde du bloc `/mcp` ci-dessous. Le contrôle
+    //   d'origine, la limitation de débit et l'authentification y vivent TOUS ; une
+    //   page publique doit répondre à n'importe quel navigateur, et ne doit donc pas
+    //   passer par `origineRefusee()`. Corollaire à ne pas oublier : ne JAMAIS
+    //   remonter ces contrôles en portée globale « par cohérence », ce qui casserait
+    //   la page pour tout visiteur arrivant par un lien d'un autre site.
+    //
+    // ⚠ ET DÉLIBÉRÉMENT AVANT le coupe-circuit. `MCP_ENABLED=false` protège la
+    //   SURFACE MCP — la clef d'API et son quota ; il n'y a rien à protéger ici. La
+    //   page ne porte ni secret ni donnée vivante : elle existe pour être lue, et
+    //   c'est précisément quand le connecteur est coupé qu'on veut pouvoir lire
+    //   pourquoi. Exception assumée au principe énoncé pour `/health`.
+    if (pathname === "/") {
+      if (request.method !== "GET" && request.method !== "HEAD") {
+        return new Response("Method not allowed", {
+          status: 405,
+          headers: { Allow: "GET, HEAD" },
+        });
+      }
+      return pagePublique(request);
     }
 
     if (pathname === "/mcp" || pathname.startsWith("/mcp/")) {
