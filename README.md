@@ -4,6 +4,7 @@ Serveur MCP autonome sur Cloudflare Workers, exposant la **REST API de CanLII** 
 d'outils orientés **vérification de références** plutôt que d'enveloppes d'endpoints, plus
 trois outils **hors ligne** sur les greffes et palais de justice du Québec.
 
+- **Page publique** : <https://jurisprudence.poirierlavoie.ca/> — bilingue, trois thèmes
 - **Point d'entrée** : `https://jurisprudence.poirierlavoie.ca/mcp/<secret>`
 - **Worker** `jurisprudence` · **base D1** `canlii`
 - Propriétaire : Jason Poirier Lavoie (avocat, Québec)
@@ -133,6 +134,29 @@ d'une partie à un dossier en cours plutôt que celui d'une décision publiée, 
 à CanLII un intérêt de recherche. Le risque est faible — CanLII est un organisme sans but
 lucratif canadien, et la recherche jurisprudentielle nominative est l'usage normal du site —
 mais il n'est pas nul, et il mérite d'être connu plutôt que découvert.
+
+---
+
+## Page publique (§18)
+
+`GET /` sert une page **statique et bilingue** (français · anglais, thème auto / clair /
+sombre) qui décrit les treize outils, leurs schémas, la structure d'un numéro de dossier
+judiciaire et le répertoire des greffes.
+
+**Tout y dérive des données vives** : les outils viennent de `listToolDescriptors()` — la
+fonction même que sert `tools/list` —, les issues d'analyse du **vrai parseur exécuté au
+rendu**, les greffes des tables de `src/qc/`, les réserves des constantes `GARDE_*`. Une
+valeur recopiée deviendrait fausse sans qu'aucun test n'échoue ; il n'y a donc aucune copie.
+
+Trois propriétés de sa route sont délibérées et testées : égalité stricte sur `/` ;
+**hors** du bloc `/mcp`, dont la garde d'origine refuserait la page à tout visiteur venu
+d'un lien externe ; et **aucun en-tête CORS**, sans quoi la page pourrait servir d'oracle
+à une autre origine. Le secret n'y paraît jamais — seulement sa forme. Elle est servie
+même lorsque `MCP_ENABLED=false` : le coupe-circuit protège la surface MCP, pas la
+documentation.
+
+Aucune requête tierce : ni CDN, ni police distante, ni image. Sans JavaScript, le français
+s'affiche et tout reste lisible.
 
 ---
 

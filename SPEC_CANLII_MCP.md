@@ -917,6 +917,71 @@ Les **coordonnées** (téléphone par chambre, courriels de service) s'ajouteron
 
 ---
 
+## 18. Page publique (`GET /`)
+
+*Ajoutée le 2026-07-30. Les §1 à §17 décrivent une surface exclusivement JSON, consommée par des clients MCP. Cette section ajoute la PREMIÈRE surface HTML, sur la même origine que `/mcp/<secret>` — d'où le soin.*
+
+### 18.1 Ce que la page est, et ce qu'elle n'est pas
+
+Une page **statique, publique, bilingue** décrivant le connecteur : ses treize outils, leurs schémas, la structure d'un numéro de dossier judiciaire québécois et ses issues, et le répertoire des greffes et palais. Elle sert deux publics — qui n'a pas accès au connecteur, et qui l'utilise et veut relire le contrat.
+
+Elle n'est **pas** une console, n'accepte aucune saisie, n'appelle rien et n'écrit rien.
+
+### 18.2 Route et sécurité
+
+`GET` et `HEAD` sur **`/` exactement** ; toute autre méthode rend `405`. Le `404` final reste la réponse de tout autre chemin — l'égalité stricte est la garantie que la page n'est pas un fourre-tout.
+
+Trois propriétés, toutes testées :
+
+1. **Hors du bloc `/mcp`.** Le contrôle d'origine (§9.6), la limitation de débit (§9.3) et l'authentification (§9.1) y vivent tous. Une page publique doit répondre à n'importe quel navigateur : elle ne passe donc par aucun d'eux. **Corollaire impératif** : ne jamais remonter ces contrôles en portée globale « par cohérence », ce qui refuserait la page à tout visiteur arrivant d'un lien externe.
+2. **Aucun en-tête CORS**, comme `/health`. Sans `Access-Control-Allow-Origin`, aucun script d'une autre origine ne peut LIRE la réponse : la page ne peut pas servir d'oracle.
+3. **Le secret n'y paraît jamais.** La page documente la FORME `/mcp/<secret>`. Un test refuse toute chaîne de 32 caractères hexadécimaux ou plus, tout `Bearer`, et toute mention de `api.canlii.org` ou `api_key`.
+
+**Exception au coupe-circuit (§8), délibérée.** `MCP_ENABLED=false` rend `404` sur `/health` et sur `/mcp` — au motif qu'un point d'entrée qui répondrait encore révélerait que le service existe. La page, elle, **reste servie** : elle existe pour être vue, ne porte ni secret ni donnée vivante, et c'est précisément quand le connecteur est coupé qu'on veut pouvoir lire pourquoi.
+
+**En-têtes.** Servir du `text/html` fait de cette origine une origine de DOCUMENT, ce qu'elle n'était pas tant que tout était du JSON. D'où, sur `/` seulement : `Content-Security-Policy: default-src 'none'` avec `frame-ancestors 'none'` et `base-uri 'none'`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`. `Cache-Control` court et **sans `s-maxage`** : le rendu ne coûte rien, et un cache d'arête durable ferait survivre la page à son propre déploiement.
+
+### 18.3 Le contenu DÉRIVE des données, il ne les recopie pas
+
+C'est la règle qui gouverne toute la section. Une page qui recopierait un titre d'outil, une borne de schéma ou une adresse de palais deviendrait fausse **sans qu'aucun test n'échoue**.
+
+| Rendu | Source |
+|---|---|
+| Outils : nom, titre, description | `listToolDescriptors()` — la fonction même que sert `tools/list` |
+| Schémas : types, bornes, `enum`, `required` | le `inputSchema` même que le validateur applique (§8) |
+| Issues de l'analyse d'un numéro | `analyserNumeroDossier()` **exécutée au rendu** sur des exemples |
+| Greffes, palais, districts, localités | les tables de `src/qc/` (§17) |
+| Codes de juridiction | `JURIDICTIONS` |
+| Réserves | les constantes `GARDE_*` **verbatim** |
+
+Les exemples d'analyse sont **vivants** : la page appelle le vrai parseur et affiche ce qu'il rend. Cette documentation ne peut donc pas diverger du comportement — même raisonnement que le différentiel de §17.2.
+
+### 18.4 Bilinguisme et thème
+
+**Les deux langues sont émises**, une règle CSS en masque une (`html.l-fr [data-l=en]`). Le choix se fait dans le navigateur avant le premier rendu, depuis `localStorage` puis `navigator.language`. **Sans JavaScript, le français s'affiche et tout le contenu reste lisible.**
+
+**Thème à trois états** : `auto → clair → sombre → auto`. « Auto » n'est pas une classe mais l'**absence** des deux autres — c'est ce qui rend la main à `prefers-color-scheme` — et il se persiste en *supprimant* la clef.
+
+⚠ Langue et thème vivent sur le MÊME `<html>`. Écrire `className` en bloc dans l'un des deux gestionnaires effacerait l'autre classe **en silence** : les gestionnaires n'emploient que `classList`, et le script de tête les **compose**.
+
+**L'anglais est du contenu NEUF.** Le dépôt est francophone et le français y est canonique — c'est lui que le modèle reçoit. `src/site.i18n.ts` ne porte donc **que** l'anglais, jamais une copie française. La parité est testée dans les **deux** sens, et aucune traduction ne peut être identique à son original.
+
+### 18.5 Ce que la page doit dire, et qu'un site vitrine tairait
+
+- Les **trois réserves imposées** (`GARDE_PALAIS` avec sa date, `GARDE_SANS_ADRESSE`, `GARDE_DOSSIER`), verbatim et dans le corps.
+- **Aucune coordonnée n'est portée** — ni téléphone, ni courriel, ni heures — pour aucun palais, avec renvoi au ministère de la Justice. C'est une propriété de la donnée, énoncée plutôt que laissée à découvrir.
+- Les **six greffes sans adresse publiée**, formulés comme « inconnue » et jamais « inexistante ».
+- La **frontière des sources** : `canlii_*` contre `greffe_*`/`palais_*`. La section des greffes ne mentionne pas CanLII, et un test le vérifie.
+- Les **formulations interdites** de §2 sont refusées dans la prose propre à la page. Les fiches d'outils en sont exclues du balayage : elles rendent les descriptions de §7 **verbatim**, dont l'une contient « a été infirmée » à l'intérieur d'une négation.
+
+### 18.6 Autonomie
+
+Aucune dépendance, **aucune requête tierce** : ni police distante, ni CDN, ni image, ni analytique. CSS et JavaScript sont en ligne dans le même module. Un test refuse tout `<script src>`, toute feuille de style externe et tout `@import`.
+
+Deux gardes de dérive : **aucune couleur en dur** hors des deux jeux de variables (une couleur écrite en dur ne bascule pas et devient invisible dans l'un des deux thèmes), et les deux jeux déclarent **exactement** les mêmes variables.
+
+---
+
 ## Annexe A — Gabarits de sortie (verbatim)
 
 ### A.1 `canlii_verify_citations`
