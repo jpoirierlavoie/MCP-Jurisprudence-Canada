@@ -18,6 +18,7 @@ import { GREFFES } from "../src/qc/greffes";
 import { JURIDICTIONS } from "../src/qc/juridictions";
 import { MJQ_MAJ } from "../src/qc/lieux";
 import { RELEVE_LE } from "../src/qc/palais";
+import { SECTIONS } from "../src/site";
 import { OUTILS_EN } from "../src/site.i18n";
 
 const SECRET = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
@@ -218,10 +219,42 @@ describe("§18 — autonomie et absence de dérive", () => {
   });
 
   it("chaque ancre du sommaire vise une section qui existe", async () => {
+    // « #top » est EXCLU à dessein : c'est le repli spécifié par HTML pour le haut du
+    // document, et il ne doit surtout PAS avoir de cible. Lui en inventer une casserait
+    // la pastille de retour en haut là où le JavaScript ne s'exécute pas.
     const html = await (await demander("/")).text();
     for (const m of html.matchAll(/<a href="#([a-z]+)"/g)) {
+      if (m[1] === "top") continue;
       expect(html, m[1]).toContain(`<h2 id="${m[1]}"`);
     }
+    // ... et le sommaire couvre bel et bien toutes les sections.
+    for (const s of SECTIONS) {
+      expect(html, s.id).toContain(`<a href="#${s.id}"`);
+      expect(html, s.id).toContain(`<h2 id="${s.id}"`);
+    }
+  });
+
+  it("la table des matières et la pastille survivent SANS JavaScript", async () => {
+    const html = await (await demander("/")).text();
+    // Le <details> porte `open` dans le BALISAGE : sans script il reste déplié.
+    expect(html).toContain('<details class="tdm" open>');
+    // La pastille n'est masquée que par `html.js`, classe posée par le script lui-même.
+    // Si le script ne s'exécute jamais, elle reste simplement visible.
+    expect(html).toContain("html.js .haut{opacity:0;visibility:hidden}");
+    expect(html).toContain('<a href="#top" class="haut">');
+    // Son nom accessible vient du libellé .sr, pas de la flèche (aria-hidden).
+    expect(html).toContain('<span aria-hidden="true">');
+    expect(html).toContain('<span class="sr">');
+  });
+
+  it("les deux bascules sont dans la barre de titre, alignées à droite", async () => {
+    const html = await (await demander("/")).text();
+    expect(html).toContain('<div class="bar">');
+    expect(html).toContain('<div class="btns">');
+    expect(html).toContain(".bar{display:flex;align-items:center;justify-content:space-between");
+    // L'ordre dans le DOM : le titre, PUIS les boutons.
+    const bar = html.indexOf('<div class="bar">');
+    expect(html.indexOf("<h1>", bar)).toBeLessThan(html.indexOf('<div class="btns">', bar));
   });
 });
 
@@ -309,7 +342,10 @@ describe("§18 — le contrat de vérité tient sur la page", () => {
     //   foi et ne se reformule pas ; il est déjà gouverné par ses propres assertions
     //   dans garde.test.ts. Ce que ce test-ci protège, c'est la prose PROPRE à la page.
     const html = await (await demander("/")).text();
-    const prose = html.replace(/<article class="outil">[\s\S]*?<\/article>/g, "");
+    const prose = html.replace(/<article>[\s\S]*?<\/article>/g, "");
+    // Garde de la garde : si les fiches d'outils changeaient de balise, le retrait
+    // ci-dessus deviendrait muet et ce test passerait pour de mauvaises raisons.
+    expect(prose.length).toBeLessThan(html.length - 5000);
     for (const interdite of [
       /n'existe pas/i,
       /n'a jamais existé/i,

@@ -92,93 +92,112 @@ function h2(id: SectionId): string {
 // Les deux jeux doivent déclarer EXACTEMENT les mêmes variables — un test le vérifie
 // aussi, faute de quoi le mode sombre hériterait en silence d'une valeur claire.
 
+// ⚠ IDENTIQUES À CELLES DU CONNECTEUR JUMEAU « Législation du Québec ». Les deux
+//   sites appartiennent au même praticien, portent le même genre de réserve et se
+//   consultent l'un après l'autre : une divergence de teinte ou de police les ferait
+//   passer pour deux outils sans rapport. Toute retouche ici doit être portée là-bas,
+//   et réciproquement.
 const CLAIR =
-  "--f:#1a1a17;--m:#6b6560;--b:#e0ddd6;--a:#8a3324;--bg:#fcfbf8;--card:#ffffff;" +
-  "--th:#f6f4ef;--code:#f1eee8;--hover:#faf8f4;--avert-bg:#fbf6ee;--avert-b:#e8dcc6";
+  "--f:#111;--m:#666;--b:#e2e0da;--a:#7a2e1d;--bg:#fdfcfa;--card:#fff;" +
+  "--th:#f7f5f1;--code:#f2efe9;--hover:#faf8f4;--avert-bg:#fbf7f1;--avert-b:#e6d9c6";
 
 const SOMBRE =
-  "--f:#e9e7e2;--m:#9d968c;--b:#38352e;--a:#e6906d;--bg:#15140f;--card:#1d1b15;" +
-  "--th:#242118;--code:#242118;--hover:#232016;--avert-bg:#201c14;--avert-b:#3c3426";
+  "--f:#e8e6e1;--m:#a09a90;--b:#3a372f;--a:#e08b6a;--bg:#16150f;--card:#1e1c16;" +
+  "--th:#252219;--code:#252219;--hover:#242118;--avert-bg:#211d15;--avert-b:#3d3527";
 
-/** Point de rupture du sommaire latéral. Injecté dans le JS client par jeton. */
+// Point de rupture de la barre latérale : 13rem + 2.5rem de gouttière + 60rem de
+// colonne de texte + 2.5rem de marge intérieure = 78rem. En deçà, une seule colonne.
 const LARGE = "78rem";
+
+// U+FE0E force la présentation TEXTE : sans lui, ☀ et ↑ basculent en émoji couleur sur
+// plusieurs plateformes et détonnent au milieu d'une page en serif. ◐ et ☾ n'ont pas de
+// variante émoji.
+const SOLEIL = "☀︎";
+const FLECHE = "↑︎";
 
 const CSS = `
 :root{${CLAIR}}
 @media(prefers-color-scheme:dark){:root{${SOMBRE}}}
 html.t-light{${CLAIR}}
 html.t-dark{${SOMBRE}}
-
-/* Une seule règle porte tout le bilinguisme. */
-html.l-fr [data-l=en],html.l-en [data-l=fr]{display:none}
-
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--f);
-  font:16px/1.65 Georgia,'Times New Roman',serif}
-code,pre,kbd{font-family:ui-monospace,Menlo,Consolas,monospace}
-a{color:var(--a)}
-a:hover{text-decoration:none}
-.wrap{max-width:${LARGE};margin:0 auto;padding:1.5rem 1.25rem 4rem}
-main{max-width:60rem}
-h1{font-size:1.9rem;line-height:1.25;margin:0 0 .5rem}
-h2{font-size:1.4rem;margin:2.75rem 0 .75rem;padding-bottom:.3rem;
-  border-bottom:1px solid var(--b)}
-h3{font-size:1.1rem;margin:1.75rem 0 .5rem}
-h4{font-size:1rem;margin:1.25rem 0 .35rem}
-p{margin:.6rem 0}
+body{margin:0;background:var(--bg);color:var(--f);font:16px/1.6 Georgia,'Times New Roman',serif}
+.wrap{max-width:${LARGE};margin:0 auto;padding:2rem 1.25rem 4rem;display:grid;gap:1rem}
+main{min-width:0;max-width:60rem;width:100%;justify-self:center}
 section[id]{scroll-margin-top:1.5rem}
-.muted{color:var(--m)}
-.small{font-size:.88rem}
+h1{font-size:1.6rem;margin:0}
+h2{font-size:1.35rem;margin:2.75rem 0 .75rem;padding-bottom:.3rem;border-bottom:2px solid var(--b)}
+h3{font-size:1.1rem;margin:1.75rem 0 .5rem}
+h4{font-size:1rem;margin:1.25rem 0 .25rem}
+p{margin:.6rem 0}
+a{color:var(--a)}
+code{font:.9em ui-monospace,Menlo,Consolas,monospace;background:var(--code);padding:.1em .35em;border-radius:3px}
 
-/* Barre de commandes : les deux bascules. */
-.cmd{display:flex;gap:.5rem;flex-wrap:wrap;margin:1rem 0 1.5rem}
-.cmd button{font:inherit;font-size:.85rem;cursor:pointer;padding:.35rem .8rem;
-  color:var(--f);background:var(--card);border:1px solid var(--b);border-radius:2rem}
-.cmd button:hover{background:var(--hover)}
-/* Largeur figée : les trois libellés diffèrent, le bouton sauterait à chaque clic. */
-#theme{min-width:7.5rem;text-align:center}
+/* En-tête : le titre à gauche, les deux bascules à DROITE. */
+.bar{display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap}
+.btns{display:flex;gap:.5rem;flex-wrap:wrap}
+#bascule,#theme{font:inherit;font-size:.8rem;letter-spacing:.05em;background:none;border:1px solid var(--b);
+  border-radius:999px;padding:.35rem .9rem;cursor:pointer;color:var(--m);white-space:nowrap}
+#bascule:hover,#theme:hover{border-color:var(--a);color:var(--a)}
+/* Largeur figée : les trois libellés n'ont pas la même longueur, le bouton sauterait à chaque clic. */
+#theme{min-width:6.5rem;text-align:center}
 #theme [data-t]{display:none}
 html:not(.t-light):not(.t-dark) #theme [data-t=auto],
 html.t-light #theme [data-t=light],
 html.t-dark #theme [data-t=dark]{display:inline}
 
-/* Encadré de réserve — le contrat de vérité, visible et non décoratif. */
-.avert{background:var(--avert-bg);border:1px solid var(--avert-b);
-  border-left:3px solid var(--a);border-radius:3px;padding:.75rem 1rem;margin:1rem 0}
-.avert p:first-child{margin-top:0}
-.avert p:last-child{margin-bottom:0}
-
-article.outil{border:1px solid var(--b);background:var(--card);border-radius:4px;
-  padding:.85rem 1rem;margin:.85rem 0}
-article.outil h4{margin-top:0}
-article.outil h4 code{font-size:.95rem;color:var(--a)}
-.titre{font-weight:bold;margin:.2rem 0 .5rem}
-
-table{border-collapse:collapse;width:100%;font-size:.9rem;margin:.75rem 0}
-th,td{text-align:left;padding:.4rem .55rem;border-bottom:1px solid var(--b);
-  vertical-align:top}
-th{background:var(--th);font-weight:bold}
+.ctl{display:flex;gap:.6rem;align-items:center;flex-wrap:wrap;margin:1rem 0}
+.ctl input,.ctl select{font:inherit;font-size:.9rem;padding:.4rem .6rem;border:1px solid var(--b);
+  border-radius:4px;background:var(--card);color:var(--f)}
+.ctl input{flex:1;min-width:10rem}
+.m{color:var(--m);font-size:.85rem}
+.tw{overflow-x:auto;border:1px solid var(--b);border-radius:6px;background:var(--card)}
+table{border-collapse:collapse;width:100%;font-size:.88rem}
+th,td{padding:.5rem .7rem;text-align:left;border-bottom:1px solid var(--b);vertical-align:top}
+th{background:var(--th);position:sticky;top:0}
+td.n,th.n{text-align:right;white-space:nowrap}
 tbody tr:hover{background:var(--hover)}
-td code{font-size:.85rem}
+pre{background:var(--code);border:1px solid var(--b);border-radius:6px;padding:.7rem .9rem;
+  overflow-x:auto;font-size:.85rem;line-height:1.5}
 
-pre{background:var(--code);border:1px solid var(--b);border-radius:3px;
-  padding:.7rem .85rem;overflow-x:auto;font-size:.85rem;line-height:1.5}
-:not(pre)>code{background:var(--code);padding:.1rem .3rem;border-radius:2px;
-  font-size:.9em}
+.tdm{max-width:60rem;width:100%;justify-self:center}
+.tdm ul{list-style:none;margin:.5rem 0 0;padding:0;font-size:.85rem}
+.tdm li{margin:.15rem 0}
+.tdm a{display:block;padding:.25rem .6rem;border-left:2px solid var(--b);
+  color:var(--m);text-decoration:none}
+.tdm a:hover,.tdm a.on{color:var(--a);border-left-color:var(--a)}
+.tdm a.on{font-weight:700}
+details{border:1px solid var(--b);border-radius:6px;background:var(--card);margin:.5rem 0;padding:.6rem .9rem}
+summary{cursor:pointer;font-weight:700}
 
-.filtre{display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;margin:.75rem 0}
-.filtre input,.filtre select{font:inherit;font-size:.9rem;padding:.3rem .5rem;
-  color:var(--f);background:var(--card);border:1px solid var(--b);border-radius:3px}
-.compte{color:var(--m);font-size:.85rem}
+#outils article{border-left:3px solid var(--b);padding-left:1rem;margin:1.5rem 0}
+#outils .titre{color:var(--m);font-style:italic;margin:.1rem 0 .5rem}
+.avert{background:var(--avert-bg);border:1px solid var(--avert-b);border-radius:6px;padding:.25rem 1.25rem 1rem}
+footer{margin-top:3.5rem;padding-top:1.25rem;border-top:2px solid var(--b);font-size:.9rem;color:var(--m)}
 
-footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--b);
-  color:var(--m);font-size:.88rem}
-
-.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);
-  white-space:nowrap}
-
+/* Libellé réservé aux lecteurs d'écran : retiré de l'affichage sans display:none, qui le
+   retirerait AUSSI de l'arbre d'accessibilité — la pastille redeviendrait un lien anonyme. */
+.sr{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;
+  clip-path:inset(50%);white-space:nowrap;border:0}
+.haut{position:fixed;right:1.25rem;bottom:1.25rem;z-index:10;width:2.6rem;height:2.6rem;
+  display:flex;align-items:center;justify-content:center;text-decoration:none;font-size:1.1rem;
+  background:var(--card);color:var(--m);border:1px solid var(--b);border-radius:999px}
+.haut:hover{color:var(--a);border-color:var(--a)}
+/* Sans JavaScript la classe js n'est jamais posée : la pastille reste simplement visible.
+   Le masquage et le code qui démasque vivent dans le MÊME script (voir JS). */
+html.js .haut{opacity:0;visibility:hidden}
+html.js .haut.on{opacity:1;visibility:visible}
 @media(prefers-reduced-motion:no-preference){
   html{scroll-behavior:smooth}
+  .haut{transition:opacity .2s,visibility .2s,color .2s,border-color .2s}
+}
+html.l-fr [data-l=en],html.l-en [data-l=fr]{display:none}
+@media(min-width:${LARGE}){
+  .wrap{grid-template-columns:13rem minmax(0,60rem);gap:2.5rem;align-items:start}
+  main,.tdm{max-width:none}
+  .tdm{position:sticky;top:2rem;border:0;background:none;margin:0;padding:0;
+    max-height:calc(100vh - 4rem);overflow:auto}
+  .tdm>summary{display:none}
 }
 `;
 
@@ -218,9 +237,8 @@ try{
 const JS = String.raw`
 (function(){
   var d=document, h=d.documentElement;
-  h.classList.add('js');
 
-  var b=d.getElementById('lang');
+  var b=d.getElementById('bascule');
   if(b) b.addEventListener('click',function(){
     var nv=h.classList.contains('l-en')?'fr':'en';
     h.classList.toggle('l-fr',nv==='fr'); h.classList.toggle('l-en',nv==='en');
@@ -242,6 +260,53 @@ const JS = String.raw`
       else localStorage.setItem('jurisTheme',nx);
     }catch(e){}
   });
+
+  // Table des matieres. Le balisage porte deja open : c'est ICI seulement qu'elle se
+  // replie sous le point de rupture. La ligne courante se marque par observation.
+  var td=d.querySelector('.tdm');
+  if(td){
+    try{
+      var mq=matchMedia('(min-width:LARGEUR)');
+      var sync=function(){td.open=mq.matches;};
+      sync();
+      if(mq.addEventListener) mq.addEventListener('change',sync);
+      else if(mq.addListener) mq.addListener(sync);
+    }catch(e){}
+    try{
+      var liens=[].slice.call(td.querySelectorAll('a'));
+      var cibles=liens.map(function(a){return d.getElementById(a.getAttribute('href').slice(1));});
+      var io=new IntersectionObserver(function(es){
+        for(var n=0;n<es.length;n++){
+          if(!es[n].isIntersecting) continue;
+          var k=cibles.indexOf(es[n].target); if(k<0) continue;
+          for(var j=0;j<liens.length;j++) liens[j].classList.remove('on');
+          liens[k].classList.add('on');
+        }
+      },{rootMargin:'0px 0px -70% 0px'});
+      for(var n2=0;n2<cibles.length;n2++) if(cibles[n2]) io.observe(cibles[n2]);
+    }catch(e){}
+  }
+
+  // Pastille de retour en haut. La classe 'js' est posee ICI et pas dans BOOT : c'est
+  // elle qui AUTORISE le masquage, et si ce script ne s'executait jamais (throw en
+  // amont), une classe posee dans BOOT masquerait la pastille pour toujours, sans
+  // erreur visible.
+  //
+  // if(ht){...} et JAMAIS if(!ht) return; — un return sortirait de toute l'IIFE et
+  // emporterait le filtre et le compteur du tableau.
+  var ht=d.querySelector('.haut');
+  if(ht){
+    try{
+      h.classList.add('js');
+      var seuil=function(){return (window.innerHeight||600)*0.8;};
+      var maj=function(){
+        var y=window.pageYOffset||d.documentElement.scrollTop||0;
+        if(y>seuil()) ht.classList.add('on'); else ht.classList.remove('on');
+      };
+      maj();
+      window.addEventListener('scroll',maj,{passive:true});
+    }catch(e){}
+  }
 
   var q=d.getElementById('q'), sel=d.getElementById('dist'), tb2=d.getElementById('tgreffes');
   if(q&&sel&&tb2){
@@ -284,25 +349,65 @@ const JS = String.raw`
  */
 function jsClient(): string {
   if (!JS.includes("plier")) throw new Error("JS client tronqué : « plier » absent");
-  return JS;
+  // Le point de rupture ne peut pas être interpolé : `String.raw` interpole `${…}`
+  // malgré la balise, ce qui rouvrirait le piège d'échappement. Il voyage donc comme
+  // un JETON textuel, substitué ici — sous garde, pour qu'une réécriture qui le
+  // perdrait échoue bruyamment plutôt que de laisser un `matchMedia` inopérant.
+  if (!JS.includes("LARGEUR")) throw new Error("jeton LARGEUR absent du JS client");
+  return JS.replace("LARGEUR", LARGE);
 }
 
 // ── Assemblage ────────────────────────────────────────────────────────────────
 
-function sommaire(): string {
-  const liens = SECTIONS.map((s) => `<li><a href="#${s.id}">${bi(s.fr, s.en)}</a></li>`).join("");
-  return `<nav class="sr"><ul>${liens}</ul></nav>`;
+/**
+ * Table des matières — un `<details>` : déplié en barre latérale COLLANTE au-delà du
+ * point de rupture, repliable en « Sommaire » en deçà. L'attribut `open` est dans le
+ * balisage pour que le rendu SANS JavaScript reste utilisable ; seul le script la
+ * replie sur écran étroit.
+ */
+function tdm(): string {
+  const items = SECTIONS.map((s) => `<li><a href="#${s.id}">${bi(s.fr, s.en)}</a></li>`).join("");
+  return `<details class="tdm" open>
+<summary>${bi("Sommaire", "Contents")}</summary>
+<nav><ul>${items}</ul></nav>
+</details>`;
+}
+
+/**
+ * Pastille de retour en haut, dernier enfant de `<body>`.
+ *
+ * `href="#top"` est le repli SPÉCIFIÉ par HTML : sans élément portant cet id, le
+ * fragment « top » désigne le haut du document. Le lien fonctionne donc sans une seule
+ * ligne de JavaScript — celui-ci ne fait que le masquer tant qu'on n'a pas défilé.
+ *
+ * La flèche est `aria-hidden` et le nom accessible vient du libellé `.sr` : pour un
+ * `<a>`, le CONTENU prime sur `title` dans le calcul du nom, donc une flèche seule
+ * donnerait un lien non étiqueté.
+ */
+function haut(): string {
+  return (
+    `<a href="#top" class="haut"><span aria-hidden="true">${FLECHE}</span>` +
+    `<span class="sr">${bi("Haut de page", "Back to top")}</span></a>`
+  );
+}
+
+/**
+ * Un état du bouton de thème. L'état est porté par `data-t` sur un span EXTÉRIEUR, la
+ * langue par `data-l` sur les spans intérieurs : deux dimensions, deux éléments, donc
+ * aucune collision de spécificité avec la règle de masquage bilingue.
+ */
+function etat(t: string, fr: string, en: string): string {
+  return `<span data-t="${t}">${bi(fr, en)}</span>`;
 }
 
 function entete(): string {
   return `<header>
+<div class="bar">
 <h1>${bi("Jurisprudence canadienne et greffes du Québec", EN.titre)}</h1>
-<div class="cmd">
-<button id="theme" type="button" title="Thème / Theme"
-  ><span data-t="auto">${bi("◐ Auto", "◐ Auto")}</span
-  ><span data-t="light">${bi("☀︎ Clair", "☀︎ Light")}</span
-  ><span data-t="dark">${bi("☾ Sombre", "☾ Dark")}</span></button>
-<button id="lang" type="button" title="Français / English">FR&nbsp;·&nbsp;EN</button>
+<div class="btns">
+<button id="theme" type="button" title="Thème / Theme">${etat("auto", "◐ Auto", "◐ Auto")}${etat("light", `${SOLEIL} Clair`, `${SOLEIL} Light`)}${etat("dark", "☾ Sombre", "☾ Dark")}</button>
+<button id="bascule" type="button" title="Français / English">FR&nbsp;·&nbsp;EN</button>
+</div>
 </div>
 ${biP(
   [
@@ -350,7 +455,7 @@ function estLocal(nom: string): boolean {
 function outils(): string {
   const carte = (d: Descripteur) => {
     const en = OUTILS_EN[d.name];
-    return `<article class="outil">
+    return `<article>
 <h4><code>${esc(d.name)}</code></h4>
 <p class="titre">${bi(d.title, en?.titre ?? d.title)}</p>
 ${biP([d.description], [en?.texte ?? d.description])}
@@ -426,10 +531,10 @@ function schemas(): string {
       })
       .join("");
     return `<h4><code>${esc(d.name)}</code></h4>
-<table><thead><tr>
+<div class="tw"><table><thead><tr>
 <th>${bi("Paramètre", EN.colParam)}</th><th>${bi("Type", EN.colType)}</th>
 <th>${bi("Contraintes", EN.colContrainte)}</th>
-</tr></thead><tbody>${lignes}</tbody></table>`;
+</tr></thead><tbody>${lignes}</tbody></table></div>`;
   };
 
   return `<section id="schema">
@@ -516,9 +621,9 @@ ${biP(
   ],
   EN.dossierExemplesTexte,
 )}
-<table><thead><tr>
+<div class="tw"><table><thead><tr>
 <th>${bi("Entrée", EN.colEntree)}</th><th>${bi("Issue", EN.colIssue)}</th>
-</tr></thead><tbody>${lignes}</tbody></table>
+</tr></thead><tbody>${lignes}</tbody></table></div>
 <div class="avert"><p>${bi(GARDE_DOSSIER, GARDE_DOSSIER)}</p></div>
 <h3>${bi("Codes de juridiction", EN.juridictionsTitre)}</h3>
 ${biP(
@@ -528,10 +633,10 @@ ${biP(
   ],
   EN.juridictionsTexte,
 )}
-<table><thead><tr>
+<div class="tw"><table><thead><tr>
 <th>${bi("Code", EN.colCode)}</th><th>${bi("Tribunal", EN.colTribunal)}</th>
 <th>${bi("Compétence", EN.colCompetence)}</th><th>${bi("Type de greffe", EN.colGreffeType)}</th>
-</tr></thead><tbody>${jur}</tbody></table>
+</tr></thead><tbody>${jur}</tbody></table></div>
 </section>`;
 }
 
@@ -591,16 +696,16 @@ ${biP(
   ],
   EN.greffesTexte,
 )}
-<div class="filtre">
+<div class="ctl">
 <input id="q" type="search" placeholder="Filtrer…" aria-label="Filtrer">
 <select id="dist" aria-label="District"><option value="">${bi("Tous les districts", EN.tousDistricts)}</option>${options}</select>
-<span class="compte" id="compte"></span>
+<span class="m" id="compte"></span>
 </div>
-<table id="tgreffes"><thead><tr>
+<div class="tw"><table id="tgreffes"><thead><tr>
 <th>${bi("Greffe", EN.colGreffe)}</th><th>${bi("Palais", EN.colPalais)}</th>
 <th>${bi("District judiciaire", EN.colDistrict)}</th><th>${bi("Adresse", EN.colAdresse)}</th>
 <th>${bi("Type", EN.colTypeLieu)}</th>
-</tr></thead><tbody>${lignes}</tbody></table>
+</tr></thead><tbody>${lignes}</tbody></table></div>
 
 <div class="avert">
 <p>${bi(GARDE_SANS_ADRESSE, GARDE_SANS_ADRESSE)}</p>
@@ -666,16 +771,7 @@ ${biP(
  * `Request`. C'est ce qui permet de la mémoïser sans risque de fuite entre requêtes.
  */
 export function renderSite(): string {
-  const corps = [
-    entete(),
-    sommaire(),
-    outils(),
-    schemas(),
-    dossier(),
-    greffes(),
-    acces(),
-    pied(),
-  ].join("\n");
+  const corps = [entete(), outils(), schemas(), dossier(), greffes(), acces(), pied()].join("\n");
 
   return `<!doctype html>
 <html lang="fr" class="l-fr">
@@ -689,10 +785,12 @@ export function renderSite(): string {
 </head>
 <body>
 <div class="wrap">
+${tdm()}
 <main>
 ${corps}
 </main>
 </div>
+${haut()}
 <script>${jsClient()}</script>
 </body>
 </html>`;
